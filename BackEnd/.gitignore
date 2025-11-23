@@ -2,6 +2,9 @@
 __pycache__/
 /Env/
 
+*.sqlite3
+*.db
+*.sqlite
 
 
 # VS Code and IDEs
