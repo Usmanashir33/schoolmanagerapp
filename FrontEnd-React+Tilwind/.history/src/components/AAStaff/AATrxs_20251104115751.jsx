@@ -1,0 +1,334 @@
+import { useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import { staffContext } from "../../customContexts/StaffContext";
+import { uiContext } from "../../customContexts/UiContext";
+import config from "../../customHooks/ConfigDetails";
+
+const AATrxs = () => {
+  const navigate = useNavigate();
+  const {formatNaira,getFormattedDate} = useContext(uiContext);
+  const {sendArbitRequest,trxsData,setTrxsData} = useContext(staffContext);
+  const [pageContent,setPageContent] = useState({});
+  const [search,setSearch] = useState('');
+  const [searchedTrx,setSearchedTrx] = useState([]); 
+  const [isFilterOpen,setIsFilterOpen] = useState(false);
+    const transactions = [
+        {
+          id: "TRX-2024-0001",
+          user: {
+            name: "Sarah Wilson",
+            avatar:
+              "https://readdy.ai/api/search-image?query=professional%2520headshot%2520portrait%2520of%2520a%2520woman%2520with%2520short%2520brown%2520hair%252C%2520business%2520attire%252C%2520neutral%2520background%252C%2520high%2520quality%252C%2520realistic%252C%2520professional%2520lighting&width=40&height=40&seq=1&orientation=squarish",
+          },
+          amount: "$1,250.00",
+          type: "Credit",
+          status: "Completed",
+          date: "2025-06-20",
+        },
+        {
+          id: "TRX-2024-0002",
+          user: {
+            name: "Michael Chen",
+            avatar:
+              "https://readdy.ai/api/search-image?query=professional%2520headshot%2520portrait%2520of%2520an%2520asian%2520man%2520with%2520black%2520hair%252C%2520business%2520casual%2520attire%252C%2520neutral%2520background%252C%2520high%2520quality%252C%2520realistic%252C%2520professional%2520lighting&width=40&height=40&seq=2&orientation=squarish",
+          },
+          amount: "$780.50",
+          type: "Debit",
+          status: "Pending",
+          date: "2025-06-22",
+        },
+        {
+          id: "TRX-2024-0003",
+          user: {
+            name: "Emma Thompson",
+            avatar:
+              "https://readdy.ai/api/search-image?query=professional%2520headshot%2520portrait%2520of%2520a%2520woman%2520with%2520blonde%2520hair%252C%2520business%2520attire%252C%2520neutral%2520background%252C%2520high%2520quality%252C%2520realistic%252C%2520professional%2520lighting&width=40&height=40&seq=3&orientation=squarish",
+          },
+          amount: "$2,340.75",
+          type: "Credit",
+          status: "Completed",
+          date: "2025-06-19",
+        },
+        {
+          id: "TRX-2024-0004",
+          user: {
+            name: "James Rodriguez",
+            avatar:
+              "https://readdy.ai/api/search-image?query=professional%2520headshot%2520portrait%2520of%2520a%2520hispanic%2520man%2520with%2520dark%2520hair%252C%2520business%2520casual%2520attire%252C%2520neutral%2520background%252C%2520high%2520quality%252C%2520realistic%252C%2520professional%2520lighting&width=40&height=40&seq=4&orientation=squarish",
+          },
+          amount: "$450.25",
+          type: "Debit",
+          status: "Failed",
+          date: "2025-06-21",
+        },
+        {
+          id: "TRX-2024-0005",
+          user: {
+            name: "Lisa Wang",
+            avatar:
+              "https://readdy.ai/api/search-image?query=professional%2520headshot%2520portrait%2520of%2520an%2520asian%2520woman%2520with%2520black%2520hair%252C%2520business%2520attire%252C%2520neutral%2520background%252C%2520high%2520quality%252C%2520realistic%252C%2520professional%2520lighting&width=40&height=40&seq=5&orientation=squarish",
+          },
+          amount: "$1,875.00",
+          type: "Credit",
+          status: "Completed",
+          date: "2025-06-23",
+        },
+      ];
+    
+      // Status badge color mapping
+      const getStatusBadgeClass = (status) => {
+        switch (status) {
+          case "success":
+            return "bg-green-100 text-green-800";
+          case "approved":
+            return "bg-green-100 text-green-800";
+          case "pending":
+            return "bg-yellow-100 text-yellow-800";
+          case "failed":
+            return "bg-red-100 text-red-800";
+          case "cancelled":
+            return "bg-red-100 text-red-800";
+          default:
+            return "bg-gray-100 text-gray-800";
+        }
+      };
+    
+      // Type badge color mapping
+      const getTypeBadgeClass = (type) => {
+        switch (type) {
+          case "Deposite":
+            return "bg-blue-100 text-blue-800";
+          case "Transfer-In":
+            return "bg-blue-100 text-blue-800";
+          case "Refund":
+            return "bg-blue-100 text-blue-800";
+
+          case "Transfer-Out":
+            return "bg-red-100 text-red-800";
+          case "Withdraw":
+            return "bg-red-100 text-red-800";
+          default:
+            return "bg-gray-100 text-gray-800";
+        }
+      };
+    const getTrxs = (data) => {
+        setTrxsData(data);
+      };
+
+    const getSearchedTrx = (data) => {
+      setSearchedTrx(data);
+    };
+
+    useEffect(() => {
+      setSearchedTrx([]);
+      if (search.length >= 5){
+        let waiting = 500 ;// seconds
+        setTimeout(() => {
+          const url = "/account/search-trx/";
+          sendArbitRequest(url, "POST", {search}, getSearchedTrx)
+        }, waiting );
+      }
+    },[search]);
+
+    useEffect(() => {
+        if (trxsData){
+          setPageContent(trxsData);
+        }
+      },[trxsData])
+    
+      useEffect(() => {
+        if (!trxsData?.trxs?.results?.length){
+          let url = `/staff/trxs/` ;
+          sendArbitRequest(url,"GET",null,getTrxs,true,) ;
+        }
+      },[])
+    return ( 
+        <main className="flex-1 overflow-y-auto p-2 overflow-hidden hide-scrollbar">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-4 gap-6 mb-8">
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="flex justify-between items-center mb-2">
+                <div className="bg-blue-100 p-3 rounded-lg">
+                  <i className="fas fa-exchange-alt text-blue-500"></i>
+                </div>
+                <span className="text-green-500 text-sm font-medium">+15%</span>
+              </div>
+              <div className="text-gray-500 text-sm">Recent Transactions</div>
+              <div className="text-xl font-bold mt-1">{pageContent?.recent_trx}</div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="flex justify-between items-center mb-2">
+                <div className="bg-green-100 p-3 rounded-lg">
+                  <i className="fas fa-arrow-trend-up text-green-500"></i>
+                </div>
+                <span className="text-green-500 text-sm font-medium">+12%</span>
+              </div>
+              <div className="text-gray-500 text-sm">Total Credits</div>
+              <div className="text-xl font-bold mt-1">{formatNaira(pageContent?.recent_credit_sum)}</div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="flex justify-between items-center mb-2">
+                <div className="bg-purple-100 p-3 rounded-lg">
+                  <i className="fas fa-arrow-trend-down text-purple-500"></i>
+                </div>
+                <span className="text-red-500 text-sm font-medium">+8%</span>
+              </div>
+              <div className="text-gray-500 text-sm">Total Expenses</div>
+              <div className="text-xl font-bold mt-1">{formatNaira(pageContent?.recent_debit_sum)}</div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="flex justify-between items-center mb-2">
+                <div className="bg-yellow-100 p-3 rounded-lg">
+                  <i className="fas fa-clock text-yellow-500"></i>
+                </div>
+                <span className="text-red-500 text-sm font-medium">-5%</span>
+              </div>
+              <div className="text-gray-500 text-sm">Pending Transactions</div>
+              <div className="text-xl font-bold mt-1">237</div>
+            </div>
+          </div>
+
+          {/* Transaction Management Section */}
+          <div className="bg-white rounded-lg shadow mb-8">
+            <div className="flex justify-between items-center p-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium">Transaction Management</h2>
+              <button className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-2 rounded-lg flex items-center space-x-2 cursor-pointer !rounded-button whitespace-nowrap">
+                <i className="fas fa-plus text-sm"></i>
+                <span>Add New Transaction</span>
+              </button>
+            </div>
+
+            <div className="p-4">
+              <div className="flex justify-between items-center mb-6">
+                <div className="relative w-64">
+                  <input
+
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search transactions..."
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                  <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                </div>
+                <div className="flex space-x-3">
+                  <div className="relative">
+                    <button className="flex items-center space-x-2 px-2 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 cursor-pointer !rounded-button whitespace-nowrap">
+                      <i className="fas fa-filter text-sm"></i>
+                      <span>Filters</span>
+                      <i className="fas fa-chevron-down ml-2 text-xs"></i>
+                    </button>
+                  </div>
+                  <button className="flex items-center space-x-2 px-2 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 cursor-pointer !rounded-button whitespace-nowrap">
+                    <i className="fas fa-download text-sm"></i>
+                    <span>Export</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Transactions Table */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="text-left text-gray-500 text-sm border-b border-gray-200">
+                      <th className="px-2 py-2 font-medium w-10">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </th>
+                      <th className="px-2 py-2 font-medium">Transaction ID</th>
+                      <th className="px-2 py-2 font-medium">User</th>
+                      <th className="px-2 py-2 font-medium">Amount</th>
+                      <th className="px-2 py-2 font-medium">Type</th>
+                      <th className="px-2 py-2 font-medium">Status</th>
+                      <th className="px-2 py-2 font-medium">Date</th>
+                      {/* <th className="px-2 py-2 font-medium">Actions</th> */}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(search? searchedTrx : pageContent?.trxs?.results)?.map((transaction) => (
+                    // {pageContent?.trxs && pageContent?.trxs?.results?.map((transaction) => (
+                      <tr
+                        key={transaction.id}
+                        className="border-b border-gray-200 hover:bg-gray-50 "
+                        onClick={() => {navigate(`/staffusers/trx/${transaction.id}`)}}
+                      >
+                        <td className="px-2 py-2">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-2 py-2 font-medium text-blue-600">
+                          {transaction?.id?.slice(0,8)}...
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="flex items-center">
+                            <img
+                              src={`${config.BASE_URL}${transaction.user.picture}`}
+                              alt={transaction.user.username}
+                              className="h-8 w-8 rounded-full object-cover mr-3"
+                            />
+                            <span className="font-medium">
+                              @{transaction.user.username}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 font-medium">
+                          {formatNaira(transaction?.amount)}
+                        </td>
+                        <td className="px-2 py-2">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${getTypeBadgeClass(transaction?.transaction_type)}`}
+                          >
+                            {transaction?.transaction_type}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(transaction.status)}`}
+                          >
+                            {transaction.status}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-gray-600 text-normal text-sm  ">
+                          {getFormattedDate(transaction?.trx_date)}
+                        </td>
+                        
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              <div className="flex justify-between items-center mt-6 text-sm">
+                <div className="text-gray-500">
+                  Showing 1 to 5 of 120 entries
+                </div>
+                <div className="flex space-x-1">
+                  <button className="px-3 py-1 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 cursor-pointer !rounded-button whitespace-nowrap">
+                    Previous
+                  </button>
+                  <button className="px-3 py-1 bg-blue-600 text-white rounded border border-blue-600 cursor-pointer !rounded-button whitespace-nowrap">
+                    1
+                  </button>
+                  <button className="px-3 py-1 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 cursor-pointer !rounded-button whitespace-nowrap">
+                    2
+                  </button>
+                  <button className="px-3 py-1 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 cursor-pointer !rounded-button whitespace-nowrap">
+                    3
+                  </button>
+                  <button className="px-3 py-1 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 cursor-pointer !rounded-button whitespace-nowrap">
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+     );
+}
+ 
+export default AATrxs;

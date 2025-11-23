@@ -1,0 +1,50 @@
+# Python cache files
+__pycache__/
+/Env/
+
+
+
+# VS Code and IDEs
+.vscode/
+
+
+# Exclude specific folders like history/
+/.history/
+history
+
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.pkl
+*.mypy_cache/
+*.ruff_cache/
+
+# Django
+db.sqlite3
+*.log
+
+# Virtual environments
+fentechEnv/
+env/
+/.env/
+.env/
+.venv/
+
+# Editors & OS files
+.vscode/
+.idea/
+.DS_Store
+
+# Project history folder
+
+# Ignore fetch project folder
+
+# Byte-compiled
+*.pyc
+
+# Celery beat schedule
+celerybeat-schedule

@@ -1,0 +1,22 @@
+# Python cache files
+__pycache__/
+/fentechEnv/
+
+# Django-specific
+
+# Environment variables and secrets
+.env
+.env.*
+
+# VS Code and IDEs
+.vscode/
+
+
+# macOS
+.DS_Store
+
+# Windows
+
+
+# Exclude specific folders like history/
+/.history/

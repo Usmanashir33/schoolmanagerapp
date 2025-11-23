@@ -1,0 +1,5 @@
+from django.contrib import admin
+from.models import User , KYC
+
+# Register your models here.
+mode
