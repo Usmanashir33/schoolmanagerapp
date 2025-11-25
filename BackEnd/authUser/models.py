@@ -25,7 +25,7 @@ def upload_user_image(instance,filename):
 
 class User(AbstractUser):
     id = models.UUIDField(_("id"),primary_key = True,unique=True,default = uuid.uuid4,editable=False)
-    username = models.CharField(max_length=100)
+    username = models.CharField(max_length=100,unique=True,editable=False)
     middle_name = models.CharField(_("middle Name "), max_length=100,blank=True)
     # phone_number = models.CharField(_("phone_number"), max_length=14,blank=True,unique=True)
     phone_number = models.CharField(_("phone_number"), max_length=14,blank=True)
@@ -56,7 +56,7 @@ class User(AbstractUser):
     # limitations 
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default= False)
-    is_active = models.BooleanField(_("active account"),default=False)
+    is_active = models.BooleanField(_("active account"),default=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']

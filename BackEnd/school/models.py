@@ -7,6 +7,8 @@ from authUser.models import User
 import os 
 from django.utils.translation import gettext_lazy as _  
 from datetime import datetime
+from django.db import transaction
+
 
 def upload_school_logo(instance,filename):
     ext = os.path.splitext(filename)[1]
@@ -25,6 +27,31 @@ def upload_teacher_pic(instance,filename):
 
 def uuid():
     return shortuuid.uuid()
+
+GENDER_CHOICES = (
+    ('male', 'Male'),
+    ('female', 'Female'),
+    ('other', 'Other'), 
+)
+from django.db import models
+
+class NumberCounter(models.Model):
+    last_number = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return str(self.last_number)
+    
+
+def generate_unique_admission_number(tag,prefix=''):
+    year = str(datetime.now().year)[-2:]
+    with transaction.atomic():
+        counter, created = NumberCounter.objects.select_for_update().get_or_create(id=1)
+        counter.last_number += 1
+        counter.save()
+        unique_number = str(counter.last_number).zfill(4)
+
+    return f"{tag}/{prefix}/{year}/{unique_number}" if prefix else f"{tag}/{year}/{unique_number}"
+
 
 class School(models.Model):
     id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
@@ -55,7 +82,6 @@ class School(models.Model):
     def __str__(self):
         return self.name
     
-    
 class SchoolSection(models.Model):
     id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
     name = models.CharField(max_length=100)  # Example: "SS1 A"
@@ -64,41 +90,35 @@ class SchoolSection(models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.school.name}" 
+
     
 class Teacher(models.Model) :
     id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
-    user = models.OneToOneField(User, on_delete=models.DO_NOTHING,related_name='teachers')
+    user = models.OneToOneField(User, on_delete=models.DO_NOTHING,blank=True,related_name='teachers', null=True)
+    first_name = models.CharField(max_length=100,)
+    last_name = models.CharField(max_length=100,)
+    middle_name = models.CharField(max_length=100, blank=True)
+    email = models.EmailField(unique=True,)
+    title= models.CharField(max_length=50, blank=True)  # Example: "Mr.", "Ms.", "Dr."
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
+    
     picture = models.ImageField(_("teacher pic"), upload_to= upload_teacher_pic ,default='teacher_default.png',null=True,blank=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="teachers")
-    section = models.ForeignKey(SchoolSection, on_delete=models.DO_NOTHING, related_name="teachers", null=True, blank=True)
+    section = models.ManyToManyField(SchoolSection, related_name="teachers", blank=True,symmetrical=False,)
     
-    staff_id = models.CharField(max_length=120, unique=True,blank=True,null=True)
+    staff_id = models.CharField(max_length=120, unique=True,blank=True,null=True,editable=False)
     date_of_birth = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=20, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     
     def save(self, *args, **kwargs):
         if not self.staff_id:
-            self.staff_id = self.generate_unique_employee_number( )
+            self.staff_id = generate_unique_admission_number(self.school.tag, prefix='STAFF')
         super().save(*args, **kwargs)
         
-    # craete a function to generate unique employee_number for Teachers
-    def generate_unique_employee_number(self,):
-        def generate_employee_number(number):
-            return str(number).zfill(3) 
-        # get school tag from the student's class room
-        prefix = self.school.tag
-        # get current year fron date 
-        year_last_2_digit = datetime.now().year[:2]
-        count = Teacher.objects.filter(school=self.school).count()
-        code = generate_employee_number(count + 1)
-        new_emp_number = f"{prefix}/STAFF/{year_last_2_digit}/{code}"
-        while True:
-            if not Teacher.objects.filter(employee_number = new_emp_number).exists():
-                return new_emp_number
 
     def __str__(self):
-        return self.user
+        return self.user.username
     
 class ClassRoom(models.Model):
     id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
@@ -108,40 +128,31 @@ class ClassRoom(models.Model):
     joined_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f"{self.name} - {self.school.name}" 
+        return f"{self.name} - {self.section.school.name}" 
     
-class Student(models.Model):
+class Student(models.Model) :
     id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
-    user = models.OneToOneField(User, on_delete=models.DO_NOTHING)
+    user = models.OneToOneField(User, on_delete=models.DO_NOTHING,blank=True,related_name='students', null=True)
+    first_name = models.CharField(max_length=100,)
+    last_name = models.CharField(max_length=100,)
+    middle_name = models.CharField(max_length=100, blank=True)
+    email = models.EmailField(unique=True,)
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)    
     picture = models.ImageField(_("student pic"), upload_to= upload_student_pic ,default='student_default.png',blank=True,null=True)
     
-    class_room = models.ForeignKey(ClassRoom, on_delete=models.DO_NOTHING,related_name='students')
-    admission_number = models.CharField(max_length=120,null=True)
+    class_room = models.ForeignKey(ClassRoom, on_delete=models.DO_NOTHING,related_name='students',blank=True, null=True)
+    admission_number = models.CharField(max_length=120,null=True,blank=True, unique=True,editable=False)
     date_of_birth = models.DateField(null=True, blank=True)
     parent_phone = models.CharField(max_length=20, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     
     def save(self, *args, **kwargs):
         if not self.admission_number:
-            self.admission_number = self.generate_unique_admission_number( )
+            self.admission_number = generate_unique_admission_number(self.class_room.section.school.tag)
         super().save(*args, **kwargs)
-    # craete a function to generate unique admission number for students
-    def generate_unique_admission_number(self,):
-        def generate_admission_number(number):
-            return str(number).zfill(4) 
-        # get school tag from the student's class room
-        prefix = self.class_room.section.school.tag
-        # get current year fron date 
-        year_last_2_digit = datetime.now().year[:2]
-        count = Student.objects.filter(class_room__section__school=self.class_room.section.school).count()
-        code = generate_admission_number(count + 1)
-        new_adm_number = f"{prefix}/{year_last_2_digit}/{code}"
-        while True:
-            if not Student.objects.filter(admission_number = new_adm_number).exists():
-                return new_adm_number 
-        
+    
     def __str__(self):
-        return self.user
+        return self.first_name + " " + self.last_name
     
 class Subject(models.Model) :
     id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
@@ -153,3 +164,23 @@ class Subject(models.Model) :
     
     def __str__(self):
         return self.name
+    
+class Parents(models.Model):
+    id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
+    user = models.OneToOneField(User, on_delete=models.DO_NOTHING,blank=True,related_name='parents', null=True)
+    first_name = models.CharField(max_length=100,)
+    last_name = models.CharField(max_length=100,)
+    middle_name = models.CharField(max_length=100, blank=True)
+    family_name = models.CharField(max_length=100, blank=True)
+    email = models.EmailField(unique=True,)
+    phone = models.CharField(max_length=20, blank=True)
+    address = models.CharField(max_length=255, blank=True)
+    schools = models.ManyToManyField(School, related_name="parents",symmetrical=False,blank=True,)
+    students = models.ForeignKey(Student, related_name="parents", on_delete=models.DO_NOTHING, null=True,blank=True)
+    joined_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return self.first_name + " " + self.last_name
+    class Meta:
+        verbose_name = "Parent"
+        verbose_name_plural = "Parents" 
