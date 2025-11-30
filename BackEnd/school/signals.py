@@ -4,7 +4,7 @@ from authUser.models import User
 from django.core.mail import send_mail
 
 from django.core.exceptions import ValidationError
-from .models import Student, Teacher ,Parents
+from .models import Student, Teacher ,Parents,School
 import string
 import random
 
@@ -106,8 +106,6 @@ def create_parents_user(sender, instance, **kwargs):
         email = instance.email
         if User.objects.filter(email=email).exists():
             raise ValidationError(f"Email {email} already exists.")
-        
-        
 
         password = f"Parent-{instance.email.split('@')[0]}"
         username = f"{instance.email.split('@')[0]}"
@@ -121,6 +119,38 @@ def create_parents_user(sender, instance, **kwargs):
         user.set_password(password)
         user.save()
         instance.user = user
+
+        # Send email with credentials
+        # send_mail(
+        #     subject='Your School Account',
+        #     message=f"Hello {instance.first_name},\n\n"
+        #             f"Your account has been created.\n"
+        #             f"Username: {username}\n"
+        #             f"Password: {password}\n\n"
+        #             "Please log in and change your password.",
+        #     from_email='noreply@yourschool.com',
+        #     recipient_list=[instance.email],
+        #     fail_silently=True
+        # )
+# craete director 
+@receiver(pre_save, sender=School) 
+# @receiver(post_save, sender=School) 
+def create_dirctor_user(sender, instance, **kwargs):
+    if not instance.director_id:
+        if not instance.email:
+            raise ValidationError("School email is required to create a user.")
+        # check if email is unique
+        username = f"{instance.director_email.split('@')[0]}"
+
+        user = User.objects.create(
+            username=username,
+            first_name=instance.director_fullname.split(' ')[0],
+            last_name=instance.director_fullname.split(' ')[-1],
+            email = instance.director_email,
+            phone_number = instance.director_phone,
+        ) 
+        user.save()
+        instance.director = user
 
         # Send email with credentials
         # send_mail(

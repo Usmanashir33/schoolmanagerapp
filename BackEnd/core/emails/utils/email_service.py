@@ -4,11 +4,14 @@ from celery import shared_task
 
 @shared_task # to call the redis attention 
 def send_html_email(subject: str, to_email: str, html_content: str, text_content: str = "View this email in HTML format."):
+    # make it for to_email to be list if not isinstance(to_email, list):
+    if not isinstance(to_email, list):
+        to_email = [to_email]
     email = EmailMultiAlternatives(
         subject=subject,
         body=text_content,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[to_email]
+        to=to_email,
     )
     email.attach_alternative(html_content, "text/html")
     email.send()

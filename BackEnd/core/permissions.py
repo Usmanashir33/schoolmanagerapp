@@ -10,6 +10,10 @@ class TransactionPermissionDenied(APIException):
     status_code = 202
     default_detail = {"error": "Transections suspended on this account !."}
     default_code = "permission_denied"
+class DirectorPermissionDenied(APIException):
+    status_code = 202
+    default_detail = {"error": "Director permission denied !."}
+    default_code = "permission_denied"
 
 class CheckTransectionPermission(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -19,5 +23,11 @@ class CheckTransectionPermission(permissions.BasePermission):
         # check if attribute vailable 
         if not getattr(request.user, 'can_transect', True):
             raise TransactionPermissionDenied()
+        return True
 
+class DirectorUserPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        # check if user is director in any of the schools
+        if not request.user.directorschools.exists() or not request.user.is_staff:
+            raise DirectorPermissionDenied()
         return True

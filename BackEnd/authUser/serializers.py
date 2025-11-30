@@ -14,7 +14,7 @@ class MiniUserSerializer(ModelSerializer):
     class Meta:
         model = User
         fields = [
-           "id","username","phone_number","email","picture",'first_name','last_name','middle_name'
+           "id","username","phone_number","email","picture",'first_name','last_name','middle_name',
             "refarrel_code","kyc_submitted",
             "kyc_confirmed","email_varified","is_staff","is_superuser",
         ]

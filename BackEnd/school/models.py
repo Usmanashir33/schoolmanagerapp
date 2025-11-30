@@ -25,8 +25,7 @@ def upload_teacher_pic(instance,filename):
     name = f"{instance.id}_logo{ext}"
     return os.path.join("teachers/",name)
 
-def uuid():
-    return shortuuid.uuid()
+import uuid
 
 GENDER_CHOICES = (
     ('male', 'Male'),
@@ -37,9 +36,9 @@ from django.db import models
 
 class NumberCounter(models.Model):
     last_number = models.PositiveIntegerField(default=0)
-
     def __str__(self):
         return str(self.last_number)
+    
     
 
 def generate_unique_admission_number(tag,prefix=''):
@@ -52,20 +51,25 @@ def generate_unique_admission_number(tag,prefix=''):
 
     return f"{tag}/{prefix}/{year}/{unique_number}" if prefix else f"{tag}/{year}/{unique_number}"
 
-
 class School(models.Model):
-    id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
     ref_id= models.CharField(max_length=20, unique=True, editable=False)
     
-    director = models.ForeignKey(User, on_delete=models.DO_NOTHING,related_name='schools')
-    name = models.CharField(max_length=255) 
-    email = models.EmailField(_("email"), max_length=254,blank=True,unique=True)
+    name = models.CharField(max_length=255,unique=True) 
+    email = models.EmailField(_("email"), max_length=254,unique=True)
     address = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=50, blank=True)
     
+    # Director Details
+    director = models.ForeignKey(User, on_delete=models.PROTECT,related_name='directorschools',blank=True, null=True)
+    director_fullname = models.CharField(_("director name"), max_length=150,)
+    director_email = models.EmailField(_("director email"), max_length=254, blank=True, null=True)
+    director_phone = models.CharField(max_length=300, blank=True, null=True)
+    
     logo = models.ImageField(upload_to=upload_school_logo,default='school_default.png', blank=True, null=True)
     tag = models.CharField(max_length=6, blank=True, null=True,unique=True)
-    joined_at = models.DateTimeField(auto_now_add=True)
+    joined_at = models.DateTimeField(auto_now_add=True) 
+    on_delete_request = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
         if not self.ref_id:
@@ -82,9 +86,9 @@ class School(models.Model):
     def __str__(self):
         return self.name
     
-class SchoolSection(models.Model):
-    id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
-    name = models.CharField(max_length=100)  # Example: "SS1 A"
+class SchoolSection(models.Model) :
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    name = models.CharField(max_length=100) # Example: "SS1 A"
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="sections")
     joined_at = models.DateTimeField(auto_now_add=True)
     
@@ -93,8 +97,8 @@ class SchoolSection(models.Model):
 
     
 class Teacher(models.Model) :
-    id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
-    user = models.OneToOneField(User, on_delete=models.DO_NOTHING,blank=True,related_name='teachers', null=True)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    user = models.OneToOneField(User, on_delete=models.SET_NULL,blank=True,related_name='teachers', null=True)
     first_name = models.CharField(max_length=100,)
     last_name = models.CharField(max_length=100,)
     middle_name = models.CharField(max_length=100, blank=True)
@@ -121,18 +125,18 @@ class Teacher(models.Model) :
         return self.user.username
     
 class ClassRoom(models.Model):
-    id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
     name = models.CharField(max_length=100)  # Example: "SS1 A"
     section = models.ForeignKey(SchoolSection, on_delete=models.CASCADE, related_name="classrooms", null=True,)
-    class_teacher = models.ForeignKey(Teacher, on_delete=models.DO_NOTHING, null=True, blank=True)
+    class_teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
         return f"{self.name} - {self.section.school.name}" 
     
 class Student(models.Model) :
-    id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
-    user = models.OneToOneField(User, on_delete=models.DO_NOTHING,blank=True,related_name='students', null=True)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    user = models.OneToOneField(User, on_delete=models.SET_NULL,blank=True,related_name='students', null=True)
     first_name = models.CharField(max_length=100,)
     last_name = models.CharField(max_length=100,)
     middle_name = models.CharField(max_length=100, blank=True)
@@ -140,7 +144,7 @@ class Student(models.Model) :
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)    
     picture = models.ImageField(_("student pic"), upload_to= upload_student_pic ,default='student_default.png',blank=True,null=True)
     
-    class_room = models.ForeignKey(ClassRoom, on_delete=models.DO_NOTHING,related_name='students',blank=True, null=True)
+    class_room = models.ForeignKey(ClassRoom, on_delete=models.SET_NULL,related_name='students',blank=True, null=True)
     admission_number = models.CharField(max_length=120,null=True,blank=True, unique=True,editable=False)
     date_of_birth = models.DateField(null=True, blank=True)
     parent_phone = models.CharField(max_length=20, blank=True)
@@ -155,7 +159,7 @@ class Student(models.Model) :
         return self.first_name + " " + self.last_name
     
 class Subject(models.Model) :
-    id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
     name = models.CharField(max_length=100)
     code= models.CharField(max_length=20, unique=True,null=True)
     class_room = models.ManyToManyField(ClassRoom, related_name="subjects",blank=True,symmetrical=False,)
@@ -166,8 +170,8 @@ class Subject(models.Model) :
         return self.name
     
 class Parents(models.Model):
-    id = models.CharField(primary_key=True, default=uuid, editable=False, max_length=25)
-    user = models.OneToOneField(User, on_delete=models.DO_NOTHING,blank=True,related_name='parents', null=True)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    user = models.OneToOneField(User, on_delete=models.SET_NULL,blank=True,related_name='parents', null=True)
     first_name = models.CharField(max_length=100,)
     last_name = models.CharField(max_length=100,)
     middle_name = models.CharField(max_length=100, blank=True)
@@ -176,7 +180,7 @@ class Parents(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     address = models.CharField(max_length=255, blank=True)
     schools = models.ManyToManyField(School, related_name="parents",symmetrical=False,blank=True,)
-    students = models.ForeignKey(Student, related_name="parents", on_delete=models.DO_NOTHING, null=True,blank=True)
+    students = models.ForeignKey(Student, related_name="parents", on_delete=models.SET_NULL, null=True,blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
@@ -184,3 +188,17 @@ class Parents(models.Model):
     class Meta:
         verbose_name = "Parent"
         verbose_name_plural = "Parents" 
+        
+class SchoolDeleteRequest(models.Model):
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    school = models.OneToOneField(School, on_delete=models.SET_NULL, related_name="delete_requests", null=True)
+    reason = models.TextField()
+    requested_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        self.school.on_delete_request = True
+        self.school.save()
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"Delete Request for {self.school.name} at {self.requested_at}"

@@ -4,6 +4,8 @@ from django.contrib.auth.models import AbstractUser
 from django.utils.translation import gettext_lazy as _
 from shortuuid.django_fields import ShortUUIDField
 from django.contrib.auth.hashers import make_password, check_password
+from django.utils import timezone
+
 
 import uuid
 import shortuuid
@@ -27,7 +29,6 @@ class User(AbstractUser):
     id = models.UUIDField(_("id"),primary_key = True,unique=True,default = uuid.uuid4,editable=False)
     username = models.CharField(max_length=100,unique=True,editable=False)
     middle_name = models.CharField(_("middle Name "), max_length=100,blank=True)
-    # phone_number = models.CharField(_("phone_number"), max_length=14,blank=True,unique=True)
     phone_number = models.CharField(_("phone_number"), max_length=14,blank=True)
     email =models.EmailField(_("Email"),unique=True,max_length=254)
     picture= models.ImageField(_("user pic"), upload_to= upload_user_image,default='default.png')
@@ -184,3 +185,23 @@ class VerificationCode(models.Model):
         managed = True
         verbose_name = 'UserCode'
         verbose_name_plural = 'UserCode' 
+        
+class PendingEmail(models.Model):
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    email = models.EmailField(_("Email"),unique=True,max_length=254)
+    verification_code = models.CharField(_("Verification Code"), max_length=255 ,blank=True,null=True)
+    created_at = models.DateTimeField(auto_now_add =True,)
+    
+    def setCode(self,row_code):  
+        self.verification_code = make_password(str(row_code))
+        self.save()
+        
+    def checkCode(self,row_code):
+        return check_password(str(row_code),self.verification_code)
+    
+    def is_expired(self):
+        expiration_time = self.created_at + timezone.timedelta(minutes=15)
+        return timezone.now() > expiration_time
+    
+    def __str__(self):
+        return self.email

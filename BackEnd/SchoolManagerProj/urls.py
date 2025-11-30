@@ -43,4 +43,5 @@ urlpatterns = [
     # path('api-auth/', include('rest_framework.urls', namespace='rest_framework'))
     path('admin/', admin.site.urls),
     path('authuser/',include("authUser.urls")),
+    path('school/',include("school.urls")),
 ]  + static(settings.STATIC_URL,document_root=settings.STATIC_ROOT) + static(settings.MEDIA_URL,document_root=settings.MEDIA_ROOT)

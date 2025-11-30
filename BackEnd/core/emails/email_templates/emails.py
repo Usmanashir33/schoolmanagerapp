@@ -11,16 +11,16 @@ def generate_otp_email(user_name: str, otp: str) -> str:
     """
     return base_email_template(content, title="Your OTP Code")
 
-def generate_registration_email(user_name: str, dashboard_url: str) -> str:
+def generate_registration_email(name: str, ) -> str:
     content = f"""
-        <p>Hello <strong>{user_name}</strong>,</p>
-        <p>🎉 Your registration on <strong>Fentech</strong> was successful!</p>
-        <p>Click the button below to log into your dashboard.</p>
+        <p>Hello <strong>{name}</strong>,</p>
+        <p>🎉 Your registration on <strong>MySchool</strong> was successful!</p>
+        <p>Kindle note </p>
         <p style="text-align:center;">
-            <a href="{dashboard_url}" class="button">Go to Dashboard</a>
+            you can access your dashbord using your Director email and password you provided during registration 
         </p>
     """
-    return base_email_template(content, title="Welcome to Fentech!")
+    return base_email_template(content, title="Welcome to MySchool !")
 
 def generate_login_email(user_name: str, dashboard_url: str) -> str:
     content = f"""
@@ -32,3 +32,27 @@ def generate_login_email(user_name: str, dashboard_url: str) -> str:
         </p>
     """
     return base_email_template(content, title="Welcome to Fentech!")
+
+def generate_school_update_email(director_name: str, school_name: str) -> str:
+    content = f"""
+        <p>Dear <strong>{director_name}</strong>,</p>
+        <p>🎉 Your School <strong>{school_name}</strong> is successfully updated!</p>
+        <p>if you dont initiate it  contact support!</p>
+        
+    """
+    return base_email_template(content, title="School Update Alert!")
+
+def generate_school_delete_email(director_name: str, school_name: str) -> str:
+    content = f"""
+        <p>Dear <strong>{director_name}</strong>,</p>
+        <p>🎉 Your School <strong>{school_name}</strong> deleting request is being received!</p>
+            <p style="text-align:center; color:red;">
+                ⚠️ Your school data will be permanently <strong>deleted</strong> in the next 30 days.
+                this includes all associated user accounts, records, and files.
+                during this period, you can contact support to halt the deletion process.
+                we will alert you when the deletion is completed,
+                we recommend you to back up any important information before the deadline.
+                This action cannot be undone after the deadline. ⚠️
+            </p>
+    """
+    return base_email_template(content, title="School Alert!")
