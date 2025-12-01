@@ -136,6 +136,7 @@ class SchoolCreateView(APIView) :
        
 # considering the above function craete  another view for update delete and get school details only director of the school can access it.
 class DirectorSchoolDetailView(APIView) :
+    parser_classes =[MultiPartParser,FormParser]
     permission_classes=[
         permissions.IsAuthenticated,
         DirectorUserPermission,
@@ -160,7 +161,7 @@ class DirectorSchoolDetailView(APIView) :
             verified = request.user.userspin.checkPin(pin) 
             if not verified :
                 return Response({"error":'user pins error'},status=status.HTTP_200_OK)
-            if serializer.is_valid() :
+            if serializer.is_valid() : 
                 serializer.save() 
                  # send the email to director
                 try:    

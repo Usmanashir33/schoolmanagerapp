@@ -19,6 +19,7 @@ CREATING SCHOOL
             "tag":"ne32"
         }
 DirectorSchoolDetailView
+we need formdata
     Get to get all the schools associated with the director 
 
     Updtae to update the school data only by the school director 
@@ -30,3 +31,17 @@ DirectorSchoolDetailView
         school_id
         pin
         reason
+
+Teacher Creating 
+POST    fields needed
+    first_name
+    last_name
+    middle_name
+    email
+    title
+    gender
+    picture
+    date_of_birth
+    phone
+    school
+    section

@@ -41,6 +41,14 @@ def generate_school_update_email(director_name: str, school_name: str) -> str:
         
     """
     return base_email_template(content, title="School Update Alert!")
+def generate_teacher_update_email(director_name: str, school_name: str) -> str:
+    content = f"""
+        <p>Dear <strong>{director_name}</strong>,</p>
+        <p>🎉 Your School <strong>{school_name}</strong> profile has been  successfully updated!</p>
+        <p>if you dont initiate it  contact support!</p>
+        
+    """
+    return base_email_template(content, title="School Update Alert!")
 
 def generate_school_delete_email(director_name: str, school_name: str) -> str:
     content = f"""
