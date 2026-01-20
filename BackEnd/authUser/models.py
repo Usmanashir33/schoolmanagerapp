@@ -5,8 +5,6 @@ from django.utils.translation import gettext_lazy as _
 from shortuuid.django_fields import ShortUUIDField
 from django.contrib.auth.hashers import make_password, check_password
 from django.utils import timezone
-
-
 import uuid
 import shortuuid
 
@@ -15,9 +13,15 @@ TRANSECTION_STATUS = (
     ("SUSPENDED",'SUSPENDED'),
     ("NORMAL",'NORMAL')
 )
+GENDER = (
+    ("male","Male"),
+    ("female","Female"),
+    ("other","Other"),  
+)
+
 VERIFICATION_STATUS = ( 
     ("VERIFIED",'VERIFIED'),
-    ("UNVERIFIED",'UNVERIFIED'),
+    ("UNVERIFIED",'UNVERIFIED'), 
     ("PENDING",'PENDING'),
 )
 def upload_user_image(instance,filename):
@@ -32,7 +36,9 @@ class User(AbstractUser):
     phone_number = models.CharField(_("phone_number"), max_length=14,blank=True)
     email =models.EmailField(_("Email"),unique=True,max_length=254)
     picture= models.ImageField(_("user pic"), upload_to= upload_user_image,default='default.png')
-    
+    role = models.CharField(_("role"), max_length=50,blank=True,default='Admin')
+    gender = models.CharField(_("gender"), max_length=10, choices=GENDER, blank=True)
+    date_joined = models.DateTimeField(_("date joined"), auto_now_add=True) 
     
     refarrel_code = models.CharField(
         _("invitation code"),
@@ -45,13 +51,13 @@ class User(AbstractUser):
     )
     kyc_submitted = models.CharField(
         _("kyc submitted"),max_length=50,
-        choices=VERIFICATION_STATUS,default='UNVERIFIED',
+        choices=VERIFICATION_STATUS,default=' UNVERIFIED ',
     ) 
-    kyc_confirmed = models.BooleanField(_("kyc varified"),default=False)
+    kyc_confirmed = models.BooleanField(_(" kyc varified "),default=False)
     email_varified = models.BooleanField(_("varified email"),default=False)
     
     # security
-    verification_code_set = models.CharField(_("verification_code"), max_length=255,blank=True)
+    otp_required = models.BooleanField(_("OTP Required"),default=True)
     pin_set = models.BooleanField(_("Payment Pin Set"),default=False)
     
     # limitations 
@@ -165,20 +171,26 @@ class VerificationCode(models.Model):
     code = models.CharField(_("code"), max_length=255 ,blank=True)
     updated = models.DateTimeField(auto_now=True,)
     
-    # this handles payment pin 
+    # this handles verification code 
+    def is_expired(self):
+        expiration_time = self.updated + timezone.timedelta(minutes=10)
+        return timezone.now() > expiration_time
+     
     def setCode(self,row_code):  
-        self.code = make_password(str(row_code))
+        # self.code = make_password(str(row_code))
+        self.code = str(row_code)
         self.save()
         
     def checkCode(self,row_code):
-        return check_password(str(row_code),self.code)
+        # return check_password(str(row_code), str(self.code))
+        return str(row_code) == str(self.code)
     
     def show_code(self):
         return f"{self.code[:6]}****{self.code[-6:]}"
 
 
     def __str__(self):
-       return f"{self.show_code} User Code"
+       return f"{self.code[:6]}****{self.code[-6:]} User Code"
 
     class Meta:
         db_table = ''
@@ -200,7 +212,7 @@ class PendingEmail(models.Model):
         return check_password(str(row_code),self.verification_code)
     
     def is_expired(self):
-        expiration_time = self.created_at + timezone.timedelta(minutes=15)
+        expiration_time = self.created_at + timezone.timedelta(minutes=10)
         return timezone.now() > expiration_time
     
     def __str__(self):

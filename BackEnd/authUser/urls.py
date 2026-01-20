@@ -1,27 +1,20 @@
 from django.urls import path
 from rest_framework_simplejwt.views import (TokenObtainPairView,TokenRefreshView,)
 
-from .views import RegisterView,RegisterVerifyView ,LoginRequestView,CurrentUserView
-from .views import PasswordChangeView,PasswordResetView,SearchUserView,ProfileUpdateView
-from .views import PasswordForgetView,VerifyWithEmailOtp,RetriveOtpView
+from .views import RetriveOrGenOTPView,RegisterVerifyView ,LoginRequestView,CurrentUserView
+from .views import PasswordChangeView,SearchUserView,ProfileUpdateView
 # from .views import PinChangeView,ManageUserLogin
 
 urlpatterns = [
-    
-    path('email-verif-code/',VerifyWithEmailOtp.as_view(),name='email-verification'), 
-    path('resend-otp/',RetriveOtpView.as_view(),name='resend-otp'), 
-    
-    # register and login view 
-    path('register/',RegisterView.as_view(),name='register'),  
-    path('register/verify-email/',RegisterVerifyView.as_view(),name='register-verify'),
-    path('loginRequest/',LoginRequestView.as_view(),name='login-requests'),
+    # for generating new and retriving current otp 
+    path('resend-otp/',RetriveOrGenOTPView.as_view(),name='resend-otp'),  #Tested
+    path('register/verify-email/',RegisterVerifyView.as_view(),name='register-verify'),  #Tested
+    path('loginRequest/',LoginRequestView.as_view(),name='login-requests') , #Tested
     
     # password end points 
-    path('password-change/',PasswordChangeView.as_view(),name='password-change'),
-    path('password-reset/',PasswordResetView.as_view(),name='password-reset'),
-    path('password-forget/',PasswordForgetView.as_view(),name='password-forget'),
+    path('password-change/',PasswordChangeView.as_view(),name='password-change'), #Tasted
     
-    # pin endpoints 
+    # pin endpoints  
     # path('pin-change/',PinChangeView.as_view(),name='pin-change'),
     # path('manage-user-login/',ManageUserLogin.as_view(),name='manage-user-login'),
     

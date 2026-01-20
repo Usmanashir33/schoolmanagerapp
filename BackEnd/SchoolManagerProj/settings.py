@@ -48,7 +48,15 @@ INSTALLED_APPS = [
     # custom apps 
     'core',
     'authUser',
+    'director',
     'school',
+    'section',
+    'classroom',
+    'student',
+    'teacher',
+    'staff',
+    'parent',
+    'subject',
 ]
 
 MIDDLEWARE = [

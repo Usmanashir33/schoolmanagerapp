@@ -25,9 +25,8 @@ class MiniKYCSerializer(ModelSerializer):
         fields = "__all__"
         extra_kwargs  ={'id' : {"read_only" : True}}    
                             
-class UserSerializer(ModelSerializer):
+class UserSerializer(ModelSerializer): 
     kyc = MiniKYCSerializer(KYC)
-    # account =  AccountSerializer(Account)
     class Meta:
        model = User
        exclude = ['password',]
@@ -55,7 +54,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer) :
         token = super().get_token(user)
         
         user_data = UserSerializer(user).data
-        if user.log_with_otp :
+        if user.otp_required :
             if  user.verificationcode.checkCode(cls.userOtp) :
                 # user.save()
                 # we will send confirm login email 
