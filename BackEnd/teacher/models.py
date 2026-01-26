@@ -35,7 +35,7 @@ class Teacher(models.Model) :
     last_name = models.CharField(max_length=100,)
     middle_name = models.CharField(max_length=100, blank=True)
     email = models.EmailField(unique=True,)
-    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True,default='male')
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES , blank=True,default='male')
     title= models.CharField(max_length=50, blank=True)  # Example: "Mr.", "Ms.", "Dr."
     picture = models.ImageField(_("teacher pic"), upload_to= upload_teacher_pic ,default='teacher_default.png',null=True,blank=True)
     date_of_birth = models.DateField(null=True, blank=True)

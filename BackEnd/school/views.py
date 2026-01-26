@@ -27,9 +27,9 @@ from rest_framework.parsers import MultiPartParser,FormParser
 from .models import  School ,SchoolDeleteRequest
 from director.models import Director 
 from authUser.models import User,PendingEmail
+from authUser.views import create_jwt_tokens_for_user
 from core.utils.otp_generators import generate_5_otp
  
-
 
 # we need directors verifed email to ctreat a school 
 # it requires otp verification for second step
@@ -40,6 +40,7 @@ class SchoolAndDirectorCreateView(APIView) :
         try:
             # check if otp request 
             verification_code = request.data.get('otp')
+            print('verification_code: ', verification_code)
             email = request.data.get('school_email')
             name = request.data.get('school_name')
             tag = request.data.get('school_tag')
@@ -53,7 +54,7 @@ class SchoolAndDirectorCreateView(APIView) :
             director_middle_name = request.data.get('director_middle_name')
             director_email = request.data.get('director_email')
             director_phone = request.data.get('director_phone')
-            director_gender = request.data.get('director_gender')
+            director_gender = request.data.get('director_gender').lower()
             
             
             director_password = request.data.get('director_password')
@@ -63,8 +64,9 @@ class SchoolAndDirectorCreateView(APIView) :
             if School.objects.filter( email__iexact=email ).exists() :
                 return Response({"error":"school email already used!"},status=status.HTTP_200_OK)
             
-            if Director.objects.filter( email__iexact=director_email ).exists() :
+            if User.objects.filter( email__iexact=director_email ).exists() :
                 return Response({"error":"director email already used!"},status=status.HTTP_200_OK)
+            
             if Director.objects.filter( phone__iexact=phone ).exists() :
                 return Response({"error":"director phone already used!"},status=status.HTTP_200_OK)
             
@@ -162,7 +164,7 @@ class SchoolAndDirectorCreateView(APIView) :
                 try:    
                     html_content = generate_registration_email(
                         director_email,
-                        school.director_fullname,
+                        f"{school.director_fullname}({school.name})",
                         school.director_email,
                     )
                     send_html_email.delay(
@@ -172,9 +174,13 @@ class SchoolAndDirectorCreateView(APIView) :
                     )
                 except:
                     pass
+                # generate this user access tokens 
+                tokens = create_jwt_tokens_for_user(director.user)
                 return Response({
-                    "success":"school created successfully",
-                    "data": DirectorSerializer(director).data   
+                    "success":"school_created",
+                    'role':director.role,
+                    "data": DirectorSerializer(director).data,
+                    "tokens": tokens
                     },status=status.HTTP_201_CREATED)
             else :
                 print(serializer.errors)

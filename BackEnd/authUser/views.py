@@ -69,7 +69,7 @@ def find_user_by_email_username(input_value) -> User | None:
 class RegisterVerifyView(APIView):
     permission_classes=[permissions.AllowAny]
     def post(self, request, format=None):
-        # try:
+        try:
             # fields required 
             username_field = request.data.get('username_field',None)
             email_verification_code = request.data.get('otp',None)
@@ -109,15 +109,15 @@ class RegisterVerifyView(APIView):
                 data = serialize_with_role(user,user.role)
                 if not data :
                     return Response({'error' : "user role data not found!"},status=status.HTTP_200_OK)
-                return Response({
-                    'success' : "Email verified",
+                return Response({ # Email verified
+                    'success' : " Email verified",
                     'data' : {"role":user.role,"tokens":tokens, "data":data}
                 },status=status.HTTP_201_CREATED)
             else :
                 # print('failed verification ')
                 return Response({'error' : "authentication failed!"},status=status.HTTP_200_OK)
-        # except :
-        #    return Response({"error":"server went wrong"},status=status.HTTP_200_OK)
+        except :
+           return Response({"error":"server went wrong"},status=status.HTTP_200_OK)
        
 # this view is used to create  retrive otp if not expired if expired generate new one
 # if MODE field is specipied it will generate new nomatter how 
@@ -214,7 +214,7 @@ class LoginRequestView(APIView):
                     pass
                     # return Response({'error':'Otp not sent '},status=status.HTTP_200_OK)
                         
-                print(email_verification_code)
+                print(email_verification_code) 
                 return Response({
                     "success":"incomplete_registration",
                     'email' :user.email,
@@ -266,13 +266,13 @@ class LoginRequestView(APIView):
                         )
                     except :
                         pass
-                    tokens = create_jwt_tokens_for_user(user)
                     # check if user is active to login 
                     if user and not user.is_active : # account inactive
                         return Response({
                             'error' : 'user is inactive contact support!',
                         },status=status.HTTP_200_OK) 
-                        
+                    # generate this user access tokens 
+                    tokens = create_jwt_tokens_for_user(user)
                     data = serialize_with_role(user,user.role)        
                     if not data :
                         return Response({'error' : "user role data not found!"},status=status.HTTP_200_OK)
@@ -324,15 +324,15 @@ class SearchUserView(APIView):
 class PasswordChangeView(APIView):
     # permission_classes =[permissions.AllowAny]
     def post( self, request,format=None ):
-        # try:
+        try:
             user = request.user
             authenticated_user = user.is_authenticated
             
             # fields required 
             username_field = request.data.get('username_field',None) # for reset
             current_password = request.data.get('currentCodes',None) # for change
-            password1 = request.data.get('codes1',None) # for Change and reset
-            password2 = request.data.get('codes2',None) # for Change and reset
+            password1 = request.data.get('code1',None) # for Change and reset
+            password2 = request.data.get('code2',None) # for Change and reset
             otp = request.data.get('verificationCode',None) #  for Change and reset is required at final step 
             operation_mode = request.data.get('operation_mode','reset') # reset or change
             
@@ -380,9 +380,9 @@ class PasswordChangeView(APIView):
                 )
             except :
                 pass
-            return Response({"success":"Password Changed!","mode":operation_mode},status=status.HTTP_200_OK)
-        # except :
-        #    return Response({"error":"server went wrong"},status=status.HTTP_408_REQUEST_TIMEOUT)
+            return Response({"success":"Password Changed","mode":operation_mode},status=status.HTTP_200_OK)
+        except :
+           return Response({"error":"server went wrong"},status=status.HTTP_408_REQUEST_TIMEOUT)
 class ProfileUpdateView(APIView):
         parser_classes =[MultiPartParser,FormParser]
         def put(self, request):

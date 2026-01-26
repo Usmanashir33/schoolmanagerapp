@@ -8,6 +8,7 @@ import os , uuid
 from django.utils.translation import gettext_lazy as _  
 from datetime import datetime
 from director.models import Director
+from school.models import School
 from core.models import  generate_unique_admission_number
 
 def upload_student_pic(instance,filename):
@@ -33,6 +34,7 @@ class Student(models.Model) :
     picture = models.ImageField(_("student pic"), upload_to= upload_student_pic ,default='student_default.png',blank=True,null=True)
     role = models.CharField(max_length=50,default='Student')
     class_room = models.ForeignKey(ClassRoom, on_delete=models.SET_NULL,related_name='students',blank=True, null=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="students", blank=True, null=True)
     
     admission_number = models.CharField(max_length=120,null=True,blank=True, unique=True,editable=False)
     date_of_birth = models.DateField(null=True, blank=True)

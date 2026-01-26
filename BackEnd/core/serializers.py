@@ -43,7 +43,7 @@ class DirectorSerializer(serializers.ModelSerializer):
 # --------- Teacher Role  ------------------  
 class TeacherSerializer(serializers.ModelSerializer): 
     user = MiniUserSerializer(read_only=True)
-    # school = SchoolSerializer()
+    school = SchoolSerializer()
     # section = SchoolSectionSerializer()   
     class Meta:  
         model = Teacher 
@@ -53,6 +53,8 @@ class TeacherSerializer(serializers.ModelSerializer):
     
 
 class StaffSerializer(serializers.ModelSerializer):
+    school = SchoolSerializer()
+    user = MiniUserSerializer(read_only=True)
     class Meta:
         model = Staff
         fields = '__all__'
@@ -61,6 +63,7 @@ class StaffSerializer(serializers.ModelSerializer):
         
 class StudentSerializer(serializers.ModelSerializer):
     # class_room = ClassRoomSerializer(read_only = True)
+    school = SchoolSerializer()
     user = MiniUserSerializer(read_only=True)
     class Meta:
         model = Student
@@ -70,7 +73,6 @@ class ParentsSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)
     schools = SchoolSerializer(many=True, read_only=True)
     students = StudentSerializer(read_only=True)
-    
     class Meta:
         model = Parents
         fields = '__all__'
