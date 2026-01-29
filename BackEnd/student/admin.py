@@ -4,6 +4,6 @@ from .models import Student
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display =["user","admission_number","class_room",'first_name','email',"joined_at"]
-    search_fields =['user__username','admission_number','class_room__name','id']
+    list_display =["user","admission_number",'first_name','email',"joined_at"]
+    search_fields =['user__username','admission_number','id']
 

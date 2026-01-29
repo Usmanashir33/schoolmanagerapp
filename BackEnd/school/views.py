@@ -27,7 +27,7 @@ from rest_framework.parsers import MultiPartParser,FormParser
 from .models import  School ,SchoolDeleteRequest
 from director.models import Director 
 from authUser.models import User,PendingEmail
-from authUser.views import create_jwt_tokens_for_user
+from authUser.views import create_jwt_tokens_for_user ,serialize_with_role
 from core.utils.otp_generators import generate_5_otp
  
 
@@ -176,11 +176,10 @@ class SchoolAndDirectorCreateView(APIView) :
                     pass
                 # generate this user access tokens 
                 tokens = create_jwt_tokens_for_user(director.user)
+                data = serialize_with_role(director.user,director.user.role) 
                 return Response({
                     "success":"school_created",
-                    'role':director.role,
-                    "data": DirectorSerializer(director).data,
-                    "tokens": tokens
+                    "data":{'role':director.role,"data":data, "tokens": tokens}
                     },status=status.HTTP_201_CREATED)
             else :
                 print(serializer.errors)

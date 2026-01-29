@@ -180,7 +180,7 @@ class RetriveOrGenOTPView(APIView) :
 class LoginRequestView(APIView):
     permission_classes =[permissions.AllowAny]
     def post(self, request, *args, **kwargs):
-        # try :
+        try :
             username_field = request.data.get('username_field',None)
             # username_field = username_field.lower() if username_field else None
             print('username_field: ', username_field)
@@ -202,7 +202,7 @@ class LoginRequestView(APIView):
                 verification_obj, created = VerificationCode.objects.get_or_create(user=user)
                 verification_obj.setCode(email_verification_code)
                 verification_obj.save()
-                # we send email with email_verification_code
+                # we send email with email_verification_code 
                 try:
                     html_content = generate_otp_email(user.username,email_verification_code)
                     send_html_email.delay(
@@ -286,7 +286,6 @@ class LoginRequestView(APIView):
             # we dont need otp to login 
             elif not user.otp_required :
                     tokens = create_jwt_tokens_for_user(user)
-                    user = UserSerializer(user).data
                     # check user role to provide dta 
                     data = serialize_with_role(user,user.role)  
                     if not data :
@@ -294,11 +293,11 @@ class LoginRequestView(APIView):
                     return Response({
                         'success' : 'Login Successfully ',
                         'data' : {"role":user.role, "tokens":tokens,"data":data},
-                    },status=status.HTTP_200_OK)
+                    },status=status.HTTP_200_OK) 
             else :
                return Response({'error':'login failed!'},status=status.HTTP_200_OK)
-        # except :
-            # return Response({"error":"server went wrong"})
+        except :
+            return Response({"error":"server went wrong"})
 class SearchUserView(APIView):
     def post(self, request):
         try:

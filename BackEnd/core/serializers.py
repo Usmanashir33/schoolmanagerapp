@@ -21,16 +21,41 @@ class SchoolSectionSerializer(serializers.ModelSerializer):
     class Meta:  
         model = SchoolSection 
         fields ='__all__'
-        read_only_fields = ['id', 'joined_at']
+        read_only_fields = ['id', 'joined_at'] 
         
 class SchoolSerializer(serializers.ModelSerializer):
     sections = SchoolSectionSerializer(many=True, read_only=True)
+    
+    total_teachers = serializers.SerializerMethodField()
+    total_students = serializers.SerializerMethodField()
+    total_staffs = serializers.SerializerMethodField()
+    total_classrooms = serializers.SerializerMethodField()
+    total_parents = serializers.SerializerMethodField() 
+    total_sections = serializers.SerializerMethodField()
     class Meta:  
         model = School
         fields ='__all__'
         read_only_fields = ['id', 'joined_at']
-        
-        
+    
+    def get_total_teachers(self, obj):
+        return obj.teachers.all().count()
+    
+    def get_total_students(self, obj):
+        return obj.students.all().count()
+    
+    def get_total_staffs(self, obj):
+        return obj.staffs.all().count()  
+    
+    def get_total_parents(self, obj):
+        return obj.parents.all().count()
+    
+    def get_total_sections(self, obj):
+        return obj.sections.all().count()
+    
+    def get_total_classrooms(self, obj):
+        total_classrooms = ClassRoom.objects.filter(section__school=obj).count()
+        return total_classrooms
+    
 # --------------Director Role ------------------
 class DirectorSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)
@@ -62,7 +87,6 @@ class StaffSerializer(serializers.ModelSerializer):
         
         
 class StudentSerializer(serializers.ModelSerializer):
-    # class_room = ClassRoomSerializer(read_only = True)
     school = SchoolSerializer()
     user = MiniUserSerializer(read_only=True)
     class Meta:

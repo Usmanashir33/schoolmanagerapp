@@ -5,15 +5,18 @@ from authUser.models import User
 from django.core.mail import send_mail
 
 from django.core.exceptions import ValidationError
-from .models import  VerificationCode
+from .models import  VerificationCode ,UserPins
 import string
 import random
 
 
-# signals.py
 @receiver(post_save, sender=User)
 def create_verification(sender, instance, created, **kwargs):
     if created:
         verification=VerificationCode.objects.create(user=instance)
         verification.save() 
         
+        pin=UserPins.objects.create(user=instance)
+        pin.save() 
+
+    

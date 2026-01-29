@@ -66,7 +66,7 @@ class User(AbstractUser):
     is_active = models.BooleanField(_("active account"),default=True)
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
+    REQUIRED_FIELDS = ['username'] 
 
     class Meta :
         verbose_name = 'User'
@@ -142,7 +142,7 @@ class KYC(models.Model):
         return f"kyc-{self.first_name}"
 
 class UserPins(models.Model):
-    user= models.OneToOneField(User, on_delete=models.CASCADE,related_name='userpins')
+    user= models.OneToOneField(User, on_delete=models.CASCADE,related_name='pins')
     pins = models.CharField(_("Pins"), max_length=255 ,blank=True)
     updated = models.DateTimeField(auto_now=True,)
     
@@ -152,11 +152,19 @@ class UserPins(models.Model):
         self.save()
         
     def checkPin(self,row_pin):
-        return check_password(str(row_pin),self.pins)
+        # check if user set pin 
+        if not self.user.pin_set : # user did not set  pins at all 
+            return True
+        else :
+            return check_password(str(row_pin), str(self.pins))
 
     def show_pins(self):
          return f"{self.pins[:6]}*****{self.pins[-6:]}"
-     
+    def save(self, *args, **kwargs):
+        if self.pins:
+            self.pins = make_password(str(self.pins))
+        super().save(*args, **kwargs)
+        
     def __str__(self):
        return f"{self.user.username} User Pin"
 
@@ -197,7 +205,7 @@ class VerificationCode(models.Model):
         managed = True
         verbose_name = 'UserCode'
         verbose_name_plural = 'UserCode' 
-        
+   
 class PendingEmail(models.Model):
     id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
     email = models.EmailField(_("Email"),unique=True,max_length=254)

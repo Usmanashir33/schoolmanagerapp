@@ -101,6 +101,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://197.210.53.209:5173",
     'http://localhost:5173',
     'http://localhost:3000',
+    "https://edu-front-sandy.vercel.app"
 ]
 CORS_ALLOWED_ORIGIN_ALL = True
 

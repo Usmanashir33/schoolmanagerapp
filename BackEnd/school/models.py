@@ -47,7 +47,7 @@ class School(models.Model):
             self.ref_id = self.generate_unique_sch_code('ref_id')
         super().save(*args, **kwargs)
         
-    def generate_unique_sch_code(self, field, prefix='SCH'):
+    def generate_unique_sch_code(self, field, prefix='SCH'): 
         alphabet = 'QERTYUIOPASDFGHKLZXCVBNM12451234567890'
         while True:
             code = shortuuid.ShortUUID(alphabet=alphabet).random(length=11)

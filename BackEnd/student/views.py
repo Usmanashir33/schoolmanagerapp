@@ -32,59 +32,107 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 
 from core.permissions import DirectorUserPermission
+from core.custom_pegination import CustomPagination
 from .models import Student
 from classroom.models import ClassRoom
+from school.models import School
 from .serializers import StudentSerializer
 
+class DirectorAllStudentsView(APIView):
+    permission_classes = [DirectorUserPermission]
+    # ---------------- GET  ALL STUDENT -----------------
+    def get(self, request,school_id):  
+        try:
+            director = request.user.director
+            # validate director actions 
+            valid_school  = School.objects.filter(id = school_id, director=director.id).first() 
+            if not valid_school:
+                return Response({"error": "Students not found"}, status=status.HTTP_200_OK)
+            # get all students 
+            students = valid_school.students.all().order_by('joined_at') # all school students 
+            paginator = CustomPagination()
+            paginated_students = paginator.paginate_queryset(students, request)
+            serializer_data = StudentSerializer(students, many=True).data
+            paginated_students = paginator.get_paginated_response(serializer_data)
+            
+            return Response({ 
+                    "success": "School students",
+                    "students_data": paginated_students.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
 class DirectorStudentView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     permission_classes = [DirectorUserPermission]
-
-    # ---------------- CREATE STUDENT -----------------
-    def post(self, request):
+    # ---------------- GET STUDENT -----------------
+    def get(self, request,student_id):  
         try:
+            director = request.user.director
+             # validate director actions 
+            valid_student  = Student.objects.filter(id = student_id, school__director=director.id).first()  #.exists()
+            if not valid_student:
+                return Response({"error": "Student not found"}, status=status.HTTP_200_OK)
+
+            serializer = StudentSerializer(valid_student)
+            return Response({
+                    "success": "Student details",
+                    "student": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+            
+    def post(self, request):  
+        try:
+            director = request.user.director
             pin = request.data.get("pin")
-            if not request.user.userspin.checkPin(pin):
+            school_id = request.data.get("school")
+            class_room_ids = request.data.get("class_room")
+            print('class_room_ids: ', class_room_ids)
+            
+            if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-
-            # Validate classroom belongs to director's school
-            classroom_id = request.data.get("class_room")
-            classroom = ClassRoom.objects.filter(
-                id=classroom_id,
-                section__school__director=request.user
-            ).first()
-
-            if not classroom:
-                return Response({"error": "Classroom not found or not yours"}, status=status.HTTP_200_OK)
+            
+             # validate director actions 
+            valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
+            if not valid_school:
+                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
 
             serializer = StudentSerializer(data=request.data)
             if serializer.is_valid():
+                serializer.save() 
+                if class_room_ids :
+                    class_rooms = ClassRoom.objects.filter(id__in=class_room_ids)
+                    serializer.instance.class_room.set(class_rooms)
                 serializer.save()
                 return Response({
                     "success": "Student created successfully",
-                    "student": serializer.data
+                    "new_student": serializer.data
                 }, status=status.HTTP_200_OK)
 
             return Response({"error": serializer.errors}, status=status.HTTP_200_OK)
 
-        except Exception as e:
+        except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
 
     # ---------------- UPDATE STUDENT -----------------
-    def put(self, request):
-        try:
+    def put(self, request,student_id):
+        try : 
+            director = request.user.director
             pin = request.data.get("pin")
-            if not request.user.userspin.checkPin(pin):
+            school_id = request.data.get("school")
+            # class_room_ids = request.data.get("class_room")
+            if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+             # validate director actions 
+            valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
+            if not valid_school:
+                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
 
-            student_id = request.data.get("student_id")
             student = Student.objects.filter(
-                id=student_id,
-                class_room__section__school__director=request.user
+                id=student_id, school__director=director.id
             ).first()
-
             if not student:
-                return Response({"error": "Student not found or not yours"}, status=status.HTTP_200_OK)
+                return Response({"error": "Student not found"}, status=status.HTTP_200_OK)
 
             serializer = StudentSerializer(student, data=request.data, partial=True)
             if serializer.is_valid():
@@ -95,31 +143,37 @@ class DirectorStudentView(APIView):
                 }, status=status.HTTP_200_OK)
 
             return Response({"error": serializer.errors}, status=status.HTTP_200_OK)
-
         except:
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
 
-    # ---------------- DELETE STUDENT -----------------
-    def delete(self, request):
+class DirectorStudentAdministrationView(APIView):
+    permission_classes = [DirectorUserPermission]
+    
+    def post(self, request,student_id):
         try:
+            director = request.user.director
             pin = request.data.get("pin")
-            if not request.user.userspin.checkPin(pin):
+            request_action = request.data.get("action")
+            
+            if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
 
-            student_id = request.data.get("student_id")
             student = Student.objects.filter(
                 id=student_id,
-                class_room__section__school__director=request.user
+                school__director=director.id
             ).first()
 
             if not student:
-                return Response({"error": "Student not found or not yours"}, status=status.HTTP_200_OK)
-
-            serializer = StudentSerializer(student)
-            student.delete()
+                return Response({"error": "Student not found "}, status=status.HTTP_200_OK)
+            serializer = StudentSerializer(student).data
+            
+            # ---------------- DELETE STUDENT -----------------
+            if request_action == "delete":
+                student.delete()
+                
             return Response({
-                "success": "Student deleted successfully",
-                "student": serializer.data
+                "success": f"Student {request_action} successfully",
+                "student": serializer
             }, status=status.HTTP_200_OK)
 
         except:

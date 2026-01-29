@@ -28,6 +28,6 @@ class CheckTransectionPermission(permissions.BasePermission):
 class DirectorUserPermission(permissions.BasePermission):
     def has_permission(self, request, view):
         # check if user is director in any of the schools
-        if not request.user.directorschools.exists() or not request.user.is_staff:
+        if not getattr(request.user, 'director',None) :
             raise DirectorPermissionDenied()
         return True

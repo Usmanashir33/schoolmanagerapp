@@ -35,7 +35,7 @@ class Director(models.Model):
     def show_id(self) :   
         return  f"{str(self.id)[:6]}..."
     def full_name(self):
-        return f"{self.first_name} {self.middle_name} {self.last_name}" 
+        return f"{self.first_name} {self.middle_name} {self.last_name}"  
     class Meta:
         verbose_name = "Director"
         verbose_name_plural = "Directors"

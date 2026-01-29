@@ -12,6 +12,7 @@ from director.models import Director
 from django.db import models
 from school.models import School
 from section.models import SchoolSection 
+from classroom.models import ClassRoom
 from core.models import  generate_unique_admission_number
 
 
@@ -40,9 +41,11 @@ class Teacher(models.Model) :
     picture = models.ImageField(_("teacher pic"), upload_to= upload_teacher_pic ,default='teacher_default.png',null=True,blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=20, blank=True)
+    
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="teachers")
-    section = models.ManyToManyField(SchoolSection, related_name="teachers", blank=True,symmetrical=False,)
+    class_room = models.ManyToManyField(ClassRoom ,related_name="teachers", blank=True,symmetrical=False,)
     role = models.CharField(max_length=50,default='Teacher')     
+    
     staff_id = models.CharField(max_length=120, unique=True,blank=True,null=True,editable=False)
     joined_at = models.DateTimeField(auto_now_add=True)
     

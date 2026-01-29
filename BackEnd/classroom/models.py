@@ -3,7 +3,6 @@ from django.db import models
 from django.db import models
 import shortuuid
 from section.models import SchoolSection
-from teacher.models import Teacher
 from authUser.models import User
 import os , uuid
 from django.utils.translation import gettext_lazy as _  
@@ -22,7 +21,7 @@ class ClassRoom(models.Model):
     id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
     name = models.CharField(max_length=100)  # Example: "SS1 A"
     section = models.ForeignKey(SchoolSection, on_delete=models.CASCADE, related_name="classrooms", null=True,)
-    class_teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True)
+    # class_teacher = models.ForeignKey("Teacher", on_delete=models.SET_NULL, null=True, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
