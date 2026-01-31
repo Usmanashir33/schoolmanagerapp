@@ -17,7 +17,7 @@ from core.emails.email_templates.emails import generate_school_update_email,gene
 from core.emails.utils.email_service import send_html_email
 from core.permissions import DirectorUserPermission
 
-from school.serializers import SchoolSerializer
+from core.serializers import SchoolSerializer
 from rest_framework.views import APIView
 from rest_framework import permissions
 from rest_framework import status
@@ -26,189 +26,278 @@ from rest_framework.parsers import MultiPartParser,FormParser
 from school.models import School ,SchoolDeleteRequest
 from authUser.models import User,PendingEmail
 from core.utils.otp_generators import generate_5_otp
+from staff.serializers import StaffSerializer
+from student.serializers import MiniStudentSerializer
+from teacher.serializers import TeacherSerializer
+from subject.serializers import SubjectSerializer
+from subject.models import Subject
 
 
-# we need directors verifed email to ctreat a school 
-class SchoolCreateView(APIView) :
-    parser_classes =[MultiPartParser,FormParser]
-    permission_classes=[permissions.AllowAny]
-    def post(self, request):
-        try:
-            # check if otp request 
-            verification_code = request.data.get('verification_code')
-            director_email = request.data.get('director_email').lower()
-            email = request.data.get('email').lower()
-            name = request.data.get('name').lower()
-            tag = request.data.get('tag').lower()
-            phone = request.data.get('phone').lower()
-            
-            # check if director email is used ame o email
-            if School.objects.filter( email__iexact=email ).exists() :
-                return Response({"error":"school email already used"},status=status.HTTP_200_OK)
-            
-            if School.objects.filter( phone__iexact=phone ).exists() :
-                return Response({"error":"school phone already used"},status=status.HTTP_200_OK)
-            
-            if School.objects.filter( tag__iexact=tag ).exists():
-                return Response({"error":"school tag already used"},status=status.HTTP_200_OK)
-            
-            if School.objects.filter( name__iexact=name ).exists():
-                return Response({"error":"school name already used"},status=status.HTTP_200_OK)
-            
-            if User.objects.filter( email__iexact= director_email).exists():
-                return Response({"error":"director email already used"},status=status.HTTP_200_OK)
-            
-            # check if pending email exist create the pending email verification for director
-            # check if its first request we need to send otp
-             # check passwords match
-            if request.data.get('director_password') != request.data.get('director_password2'):
-                return Response({"error":"director passwords do not match"},status=status.HTTP_200_OK)
-            
-            if not verification_code :# send verification code 
-                verification_code_gen = generate_5_otp() 
-                
-                # set new code and save
-                pending_email,created  = PendingEmail.objects.get_or_create(email = director_email)
-                pending_email.setCode(verification_code_gen)
-                
-                print(verification_code_gen,"Generated OTP for",director_email)
-                #we send email with email_verification_code to directors Email 
-                #send email here 
-                try:
-                    html_content = generate_otp_email(director_email,verification_code_gen )
-                    send_html_email.delay(
-                        subject="🔐 Your Director OTP Code 15Min ",
-                        to_email=director_email,
-                        html_content=html_content
-                    )
-                except :
-                    pass
-                return Response({"success":"otp_sent",},status=status.HTTP_200_OK) 
-            # it comes with otp check the otp and create new school 
-            # validate verification_code 
-            pending_email = PendingEmail.objects.filter(email = director_email)
-            
-            if not pending_email.exists() :
-                return Response({"error":"email not registered "},status=status.HTTP_200_OK)
-            
-            found_email = pending_email.first()
-            if not found_email.checkCode(verification_code) :
-                return Response({"error":"invalid  verification code"},status=status.HTTP_200_OK)
-            if found_email.is_expired() :
-                return Response({"error":"expired verification code"},status=status.HTTP_200_OK)
-            
-            # every thing is ohk # create school
-            serializer = SchoolSerializer(data=request.data)
-            if serializer.is_valid():   
-            #   create school not by using serializer
-                school = serializer.save()
-                school.director_password = make_password(serializer.validated_data.get('director_password'))    
-                school.save()
-                school.director.set_password(request.data.get('director_password'))
-                school.director.save()
-                pending_email.delete() # delete pending email after verification
-                
-                # send success email to director
-                try:    
-                    html_content = generate_registration_email(
-                        director_email,
-                        school.director_fullname,
-                        school.director_email,
-                    )
-                    send_html_email.delay(
-                        subject="✅ Your Director & School Account Created",
-                        to_email=[director_email,school.email],
-                        html_content=html_content
-                    )
-                except:
-                    pass
-                return Response({
-                    "success":"school created successfully",
-                    "school": SchoolSerializer(school).data
-                    },status=status.HTTP_201_CREATED)
-            else :
-                print(serializer.errors)
-                return Response({"error":"failed to create school "},status=status.HTTP_200_OK)
-        except :
-           return Response({"error":"server error"},status=status.HTTP_200_OK)
-       
-       
-# considering the above function craete  another view for update delete and get school details only director of the school can access it.
-class SchoolDetailView(APIView) :
+from core.custom_pegination import CustomPagination
+from student.models import Student
+from classroom.models import ClassRoom
+from school.models import School
+from student.serializers import StudentSerializer
+
+
+#==================================================================================================            
+#                                       SCHOOL  SECTION                           
+#==================================================================================================
+class DirectorSchoolDetailView(APIView) :
     parser_classes =[MultiPartParser,FormParser]
     permission_classes=[
         permissions.IsAuthenticated,
         DirectorUserPermission,
     ]
-    def get(self, request):
+    def get(self, request,school_id): # get school data 
         try:
-            schools = request.user.directorschools.all()
-            serializer = SchoolSerializer(schools,many=True)
-            return Response({"success":'success', "schools": serializer.data}, status=status.HTTP_200_OK)
+            school = request.user.director.directorschools.filter(id=school_id).first() # get school and academics
+            if not school :
+                return Response({"error":"school not found "},status=status.HTTP_200_OK)
+            # limited to 100  recordes 
+            students = school.students.all()[:100]
+            teachers = school.teachers.all()[:100]
+            staffs = school.staffs.all()[:100]
+            subjects = school.subjects.all()
+             
+            return Response({
+                "success":'school_data', 
+                "school_and_academics" : SchoolSerializer(school).data ,
+                "school_students" : MiniStudentSerializer(students,many=True).data ,
+                "school_teachers" : TeacherSerializer(teachers,many=True).data ,
+                "school_staffs" : StaffSerializer(staffs,many=True).data,
+                "school_subjects" : SubjectSerializer(subjects,many=True).data,
+                }, status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK)
     
-    def put(self, request, ):
+    def put(self, request, school_id):
         try:
-            school_id = request.data.get('school_id')
+            director = request.user.director
+            
+            # ============= required fields ==============
             pin = request.data.get('pin')
             
-            school = get_object_or_404(School, id=school_id, director=request.user)
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            
+            # validate director actions 
+            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            if not school:
+                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+            
+            # make sure unexisted data is not 
+
             serializer = SchoolSerializer(school, data=request.data, partial=True)
             # authenticate the director 
             # by checking  directord pin 
-            verified = request.user.userspin.checkPin(pin) 
-            if not verified :
-                return Response({"error":'user pins error'},status=status.HTTP_200_OK)
             if serializer.is_valid() : 
-                serializer.save() 
+                serializer.save()  
                  # send the email to director
                 try:    
                     html_content = generate_school_update_email(
-                        school.director_fullname,
-                        school.name,
+                        school.director.full_name , 
+                        school.name, 
                     )
                     send_html_email.delay(
-                        subject="School Account Updated",
-                        to_email=[school.director_email,school.email],
+                        subject="School Account Updated" ,
+                        to_email=[school.director.email,school.email] , 
                         html_content=html_content
                     )
-                except:
-                    pass
-                return Response({"success":"school updated successfully", "school": serializer.data}, status=status.HTTP_200_OK)
-            return Response({'error': 'invalid data'}, status=status.HTTP_400_BAD_REQUEST)
+                except Exception :
+                    pass 
+                return Response({"success":"school updated successfully", "updated_school": serializer.data}, status=status.HTTP_200_OK)
+            return Response({'error': 'Updated data meybe not available change'}, status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK)
     
-    def post(self, request,): # delting the school request 
+    def post(self, request,school_id): # delting the school request 
         try:
-            school_id = request.data.get('school_id')
-            pin = request.data.get('pin')
-            reason = request.data.get('reason')
+            director = request.user.director
             
-            school = get_object_or_404(School, id=school_id, director=request.user)
-            # authenticate the director # by checking  directord pin 
-            verified = request.user.userspin.checkPin(pin) 
-            if not verified :
-                return Response({"error":'user pins error'},status=status.HTTP_200_OK)
+            # ============= required fields ==============
+            pin = request.data.get('pin')
+            reason  = request.data.get('reason')
+            action = request.data.get("action")
+            
+            if action != "delete" :
+                return Response({"error": "invalid action"}, status=status.HTTP_200_OK)
+                
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            
+             # validate director actions 
+            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            if not school:
+                return Response({"error": "school not Found"}, status=status.HTTP_200_OK)
+            
             # craete delte request here 
-            del_request = SchoolDeleteRequest.objects.create(
-                reason = reason ,
-                school = school
+            if school.delete_requests :
+                school.on_delete_request =True
+                school.save()
+                return Response({"success": "school delete in progress",
+                                 "details" :f"R-{school.delete_requests.days_remain()}" }, status=status.HTTP_200_OK) 
+            del_request = SchoolDeleteRequest.objects.create( 
+                reason = reason, school = school
             )
-            del_request.save()
+            del_request.save() 
             # send the email to director
             try:    
                 html_content = generate_school_delete_email(
-                    school.director_fullname,
+                    school.director.full_name,
                     school.name,
                 )
                 send_html_email.delay(
                     subject="❌ School Account Deleted",
-                    to_email=[school.director_email,school.email],
+                    to_email=[school.director.email,school.email],
                     html_content=html_content)
             except: 
                 pass
             return Response({"success":"school delete request submitted successfully",'school': SchoolSerializer(school).data},status=status.HTTP_204_NO_CONTENT)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
+        
+        
+#==================================================================================================            
+#                                       STUDENT SECTION                           
+#==================================================================================================
+class DirectorAllStudentsView(APIView): #paginated request
+    permission_classes = [DirectorUserPermission]
+    
+    # ---------------- GET  ALL STUDENT -----------------
+    def get(self, request,school_id):  
+        try:
+            director = request.user.director
+            # validate director actions 
+            valid_school  = School.objects.filter(id = school_id, director=director.id).first() 
+            if not valid_school:
+                return Response({"error": "Students not found"}, status=status.HTTP_200_OK)
+            # get all students 
+            students = valid_school.students.all().order_by('joined_at') # all school students 
+            paginator = CustomPagination()
+            paginated_students = paginator.paginate_queryset(students, request)
+            serializer_data = StudentSerializer(students, many=True).data
+            paginated_students = paginator.get_paginated_response(serializer_data)
+            
+            return Response({ 
+                    "success": "School students",
+                    "students_data": paginated_students.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+class DirectorStudentView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [DirectorUserPermission]
+    # ---------------- GET STUDENT -----------------
+    def get(self, request,student_id):  
+        try:
+            director = request.user.director
+             # validate director actions 
+            valid_student  = Student.objects.filter(id = student_id, school__director=director.id).first()  #.exists()
+            if not valid_student:
+                return Response({"error": "Student not found"}, status=status.HTTP_200_OK)
+            serializer = StudentSerializer(valid_student)
+            return Response({
+                    "success": "Student details",
+                    "student": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+            
+    def post(self, request):  
+        try:
+            director = request.user.director
+            pin = request.data.get("pin")
+            school_id = request.data.get("school")
+            class_room_ids = request.data.get("class_room")
+            print('class_room_ids: ', class_room_ids)
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            
+             # validate director actions 
+            valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
+            if not valid_school:
+                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+
+            serializer = StudentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save() 
+                if class_room_ids :
+                    class_rooms = ClassRoom.objects.filter(id__in=class_room_ids)
+                    serializer.instance.class_room.set(class_rooms)
+                serializer.save()
+                return Response({
+                    "success": "Student created successfully",
+                    "new_student": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({"error": serializer.errors}, status=status.HTTP_200_OK)
+
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+
+    # ---------------- UPDATE STUDENT -----------------
+    def put(self, request,student_id):
+        try : 
+            director = request.user.director
+            pin = request.data.get("pin")
+            school_id = request.data.get("school")
+            # class_room_ids = request.data.get("class_room")
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+             # validate director actions 
+            valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
+            if not valid_school:
+                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+
+            student = Student.objects.filter(
+                id=student_id, school__director=director.id
+            ).first()
+            if not student:
+                return Response({"error": "Student not found"}, status=status.HTTP_200_OK)
+
+            serializer = StudentSerializer(student, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "success": "Student updated successfully",
+                    "student": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({"error": serializer.errors}, status=status.HTTP_200_OK)
+        except:
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+
+class DirectorStudentAdministrationView(APIView):
+    permission_classes = [DirectorUserPermission]
+    
+    def post(self, request,student_id):
+        try:
+            director = request.user.director
+            pin = request.data.get("pin")
+            request_action = request.data.get("action")
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+
+            student = Student.objects.filter(
+                id=student_id,
+                school__director=director.id
+            ).first()
+
+            if not student:
+                return Response({"error": "Student not found "}, status=status.HTTP_200_OK)
+            serializer = StudentSerializer(student).data
+            
+            # ---------------- DELETE STUDENT -----------------
+            if request_action == "delete":
+                student.delete()
+                
+            return Response({
+                "success": f"Student {request_action} successfully",
+                "student": serializer
+            }, status=status.HTTP_200_OK)
+
+        except:
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)

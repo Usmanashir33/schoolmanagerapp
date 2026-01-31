@@ -9,4 +9,9 @@ class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = '__all__'
+class MiniStudentSerializer(serializers.ModelSerializer):
+    user = MiniUserSerializer(read_only=True)
+    class Meta:
+        model = Student 
+        fields = '__all__'
 

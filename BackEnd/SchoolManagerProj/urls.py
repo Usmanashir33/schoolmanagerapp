@@ -45,4 +45,5 @@ urlpatterns = [
     path('authuser/',include("authUser.urls")),
     path('school/',include("school.urls")),
     path('student/',include("student.urls")),
+    path('director/',include("director.urls")),
 ]  + static(settings.STATIC_URL,document_root=settings.STATIC_ROOT) + static(settings.MEDIA_URL,document_root=settings.MEDIA_ROOT)

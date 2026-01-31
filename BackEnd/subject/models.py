@@ -2,6 +2,7 @@ from django.db import models
 import os,uuid
 from classroom.models import ClassRoom
 from teacher.models import Teacher
+from school.models import School
 
 # Create your models here.
 class Subject(models.Model) :
@@ -11,7 +12,8 @@ class Subject(models.Model) :
     credits =models.IntegerField(blank=True,null=True)
     class_room = models.ManyToManyField(ClassRoom, related_name="subjects",blank=True,symmetrical=False,)
     teacher = models.ManyToManyField(Teacher,related_name="subjects", blank=True,symmetrical=False,)
+    school = models.ForeignKey(School,related_name="subjects", on_delete=models.CASCADE ,blank=True)
     added_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return self.name + " " + self.code
+        return self.name + " " + self.code 

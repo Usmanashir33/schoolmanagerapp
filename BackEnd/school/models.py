@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from datetime import datetime
 from director.models import Director
 from core.models import  generate_unique_admission_number
+from django.utils import timezone
 
 
 
@@ -43,7 +44,7 @@ class School(models.Model):
     on_delete_request = models.BooleanField(default=False) 
 
     def save(self, *args, **kwargs):
-        if not self.ref_id:
+        if not self.ref_id: 
             self.ref_id = self.generate_unique_sch_code('ref_id')
         super().save(*args, **kwargs)
         
@@ -67,5 +68,12 @@ class SchoolDeleteRequest(models.Model) :
         self.school.save()
         super().save(*args, **kwargs)
     
+    def days_remain(self):
+        expiration_time = self.requested_at + timezone.timedelta(days=60)
+        remaining_time = expiration_time - timezone.now()
+        if remaining_time.total_seconds() <= 0:
+            return 0
+        return f"{remaining_time.days} days"
+    
     def __str__(self):
-        return f"Delete Request for {self.school.name} at {self.requested_at}"
+        return f"Delete Request for {self.school.name}"

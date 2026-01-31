@@ -27,11 +27,16 @@ from rest_framework.parsers import MultiPartParser,FormParser
 from .models import  School ,SchoolDeleteRequest
 from director.models import Director 
 from authUser.models import User,PendingEmail
-from authUser.views import create_jwt_tokens_for_user ,serialize_with_role
+from authUser.views import create_jwt_tokens_for_user ,serialize_with_role 
 from core.utils.otp_generators import generate_5_otp
+from staff.serializers import StaffSerializer
+from student.serializers import StudentSerializer,MiniStudentSerializer
+from teacher.serializers import TeacherSerializer
+from subject.serializers import SubjectSerializer
+from subject.models import Subject
  
 
-# we need directors verifed email to ctreat a school 
+# we need directors verifed email to ctreat a school  
 # it requires otp verification for second step
 class SchoolAndDirectorCreateView(APIView) :
     parser_classes =[MultiPartParser,FormParser]
@@ -187,82 +192,3 @@ class SchoolAndDirectorCreateView(APIView) :
         except :
            return Response({"error":"server error"},status=status.HTTP_200_OK)
        
-# considering the above function craete  another view for update delete and get school details only director of the school can access it.
-class DirectorSchoolDetailView(APIView) :
-    parser_classes =[MultiPartParser,FormParser]
-    permission_classes=[
-        permissions.IsAuthenticated,
-        DirectorUserPermission,
-    ]
-    def get(self, request):
-        try:
-            schools = request.user.directorschools.all()
-            serializer = SchoolSerializer(schools,many=True)
-            return Response({"success":'success', "schools": serializer.data}, status=status.HTTP_200_OK)
-        except:
-            return Response({"error":"server error"},status=status.HTTP_200_OK)
-    
-    def put(self, request, ):
-        try:
-            school_id = request.data.get('school_id')
-            pin = request.data.get('pin')
-            
-            school = get_object_or_404(School, id=school_id, director=request.user)
-            serializer = SchoolSerializer(school, data=request.data, partial=True)
-            # authenticate the director 
-            # by checking  directord pin 
-            verified = request.user.userspin.checkPin(pin) 
-            if not verified :
-                return Response({"error":'user pins error'},status=status.HTTP_200_OK)
-            if serializer.is_valid() : 
-                serializer.save() 
-                 # send the email to director
-                try:    
-                    html_content = generate_school_update_email(
-                        school.director_fullname,
-                        school.name,
-                    )
-                    send_html_email.delay(
-                        subject="School Account Updated",
-                        to_email=[school.director_email,school.email],
-                        html_content=html_content
-                    )
-                except:
-                    pass
-                return Response({"success":"school updated successfully", "school": serializer.data}, status=status.HTTP_200_OK)
-            return Response({'error': 'invalid data'}, status=status.HTTP_400_BAD_REQUEST)
-        except:
-            return Response({"error":"server error"},status=status.HTTP_200_OK)
-    
-    def post(self, request,): # delting the school request 
-        try:
-            school_id = request.data.get('school_id')
-            pin = request.data.get('pin')
-            reason = request.data.get('reason')
-            
-            school = get_object_or_404(School, id=school_id, director=request.user)
-            # authenticate the director # by checking  directord pin 
-            verified = request.user.userspin.checkPin(pin) 
-            if not verified :
-                return Response({"error":'user pins error'},status=status.HTTP_200_OK)
-            # craete delte request here 
-            del_request = SchoolDeleteRequest.objects.create(
-                reason = reason ,
-                school = school
-            )
-            del_request.save()
-            # send the email to director
-            try:    
-                html_content = generate_school_delete_email(
-                    school.director_fullname,
-                    school.name,
-                )
-                send_html_email.delay(
-                    subject="❌ School Account Deleted",
-                    to_email=[school.director_email,school.email],
-                    html_content=html_content)
-            except: 
-                pass
-            return Response({"success":"school delete request submitted successfully",'school': SchoolSerializer(school).data},status=status.HTTP_204_NO_CONTENT)
-        except:
-            return Response({"error":"server error"},status=status.HTTP_200_OK) 
