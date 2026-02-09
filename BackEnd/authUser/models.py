@@ -8,12 +8,12 @@ from django.utils import timezone
 import uuid
 import shortuuid
 
-# Create your models here. 
+# Create your models here.  
 TRANSECTION_STATUS = (
     ("SUSPENDED",'SUSPENDED'),
     ("NORMAL",'NORMAL')
 )
-GENDER = (
+GENDER = ( 
     ("male","Male"),
     ("female","Female"),
     ("other","Other"),  
@@ -148,7 +148,7 @@ class UserPins(models.Model):
     
     # this handles payment pin 
     def setPin(self,row_pin):
-        self.pins = make_password(str(row_pin))
+        self.pins = row_pin
         self.save()
         
     def checkPin(self,row_pin):
@@ -160,6 +160,7 @@ class UserPins(models.Model):
 
     def show_pins(self):
          return f"{self.pins[:6]}*****{self.pins[-6:]}"
+     
     def save(self, *args, **kwargs):
         if self.pins:
             self.pins = make_password(str(self.pins))

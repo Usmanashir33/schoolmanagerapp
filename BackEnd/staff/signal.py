@@ -57,20 +57,6 @@ def create_teacher_user(sender, instance, **kwargs):
         #     recipient_list=[instance.email],
         #     fail_silently=True
         # )
-@receiver(pre_save, sender=Staff)
-def create_activity_role(sender, instance, **kwargs):
-    # if not instance.user_id:
-        staff_gender = instance.gender.lower()
-        if staff_gender == 'male':
-            role = 'security'
-        elif staff_gender == 'female':
-            role = 'cleaner'
-        else:
-            role = 'driver'
-        activity_role = ActivityRole.objects.create(
-            role=role
-        )
-        activity_role.save()
-        instance.activity_role = activity_role
+
 
         

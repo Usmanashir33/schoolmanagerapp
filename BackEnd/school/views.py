@@ -30,7 +30,7 @@ from authUser.models import User,PendingEmail
 from authUser.views import create_jwt_tokens_for_user ,serialize_with_role 
 from core.utils.otp_generators import generate_5_otp
 from staff.serializers import StaffSerializer
-from student.serializers import StudentSerializer,MiniStudentSerializer
+from student.serializers import StudentSerializer,StudentSerializer
 from teacher.serializers import TeacherSerializer
 from subject.serializers import SubjectSerializer
 from subject.models import Subject

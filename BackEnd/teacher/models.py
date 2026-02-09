@@ -13,7 +13,7 @@ from django.db import models
 from school.models import School
 from section.models import SchoolSection 
 from classroom.models import ClassRoom
-from core.models import  generate_unique_admission_number
+from core.models import  generate_unique_admission_number , BankDetails
 
 
 def upload_teacher_pic(instance,filename):
@@ -26,6 +26,8 @@ GENDER_CHOICES = (
     ('female', 'Female'),
     ('other', 'Other'), 
 )
+from django.db import models
+
 
 # Create your models here.
 class Teacher(models.Model) :
@@ -44,7 +46,12 @@ class Teacher(models.Model) :
     
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="teachers")
     class_room = models.ManyToManyField(ClassRoom ,related_name="teachers", blank=True,symmetrical=False,)
-    role = models.CharField(max_length=50,default='Teacher')     
+    # form_class = models.ForeignKey(ClassRoom, on_delete=models.SET_NULL, null=True, blank=True,related_name = 'form_teacher')
+    
+    role = models.CharField(max_length=50,default='Teacher')      
+    nin = models.CharField(max_length=50,blank=True)     
+    salary = models.CharField(blank=True,max_length=20,)     
+    bank_details = models.OneToOneField(BankDetails,on_delete=models.SET_NULL,related_name= 'user',blank=True,null=True)
     
     staff_id = models.CharField(max_length=120, unique=True,blank=True,null=True,editable=False)
     joined_at = models.DateTimeField(auto_now_add=True)
@@ -53,7 +60,6 @@ class Teacher(models.Model) :
         if not self.staff_id:
             self.staff_id = generate_unique_admission_number(self.school.tag, prefix='STAFF')
         super().save(*args, **kwargs)
-        
 
     def __str__(self):
         return self.user.username

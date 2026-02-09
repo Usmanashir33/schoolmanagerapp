@@ -29,3 +29,11 @@ def generate_unique_admission_number(tag,prefix=''):
 
     return f"{tag}/{prefix}/{year}/{unique_number}" if prefix else f"{tag}/{year}/{unique_number}"
 
+class BankDetails(models.Model):
+    bank_name = models.CharField(max_length=100)
+    account_number = models.CharField(max_length=20)
+    account_name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True) 
+
+    def __str__(self):
+        return f"{self.bank_name} - {self.account_number}"

@@ -7,7 +7,7 @@ import os , uuid
 from django.utils.translation import gettext_lazy as _  
 from datetime import datetime
 from director.models import Director
-from core.models import  generate_unique_admission_number
+from core.models import  generate_unique_admission_number ,BankDetails
 from school.models import School
 
 def upload_staff_pic(instance,filename):
@@ -62,6 +62,10 @@ class Staff(models.Model) :
     activity_role = models.ForeignKey(ActivityRole, on_delete=models.SET_NULL, related_name="roles", blank=True, null=True)
     address = models.TextField(blank=True)
     staff_id = models.CharField(max_length=120, unique=True,blank=True,null=True,editable=False)
+    nin = models.CharField(max_length=50,blank=True)     
+    salary = models.CharField(blank=True,max_length=20,)     
+    bank_details = models.OneToOneField(BankDetails,on_delete=models.SET_NULL,related_name= 'staff',blank=True,null=True)
+    
     joined_at = models.DateTimeField(auto_now_add=True)
     
     def save(self, *args, **kwargs):

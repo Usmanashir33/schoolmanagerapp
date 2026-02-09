@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 from datetime import datetime
 from director.models import Director
 from school.models import School
+from parent.models import Parents
 from core.models import  generate_unique_admission_number
 
 def upload_student_pic(instance,filename):
@@ -29,7 +30,7 @@ class Student(models.Model) :
     
     first_name = models.CharField(max_length=100,)
     last_name = models.CharField(max_length=100,)
-    middle_name = models.CharField(max_length=100, blank=True) 
+    middle_name = models.CharField(max_length=100, blank=True)  
     email = models.EmailField(unique=True,) 
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)    
     picture = models.ImageField(_("student pic"), upload_to= upload_student_pic ,default='student_default.png',blank=True,null=True)
@@ -41,14 +42,10 @@ class Student(models.Model) :
     admission_number = models.CharField(max_length=120,null=True,blank=True, unique=True,editable=False)
     
     date_of_birth = models.DateField(null=True, blank=True) 
-    parent_phone = models.CharField(max_length=20, blank=True)
-    
+    guardian = models.ForeignKey(Parents, on_delete=models.SET_NULL, related_name="children", blank=True, null=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     
-    
     def save(self, *args, **kwargs):
-        # if not self.class_room :
-        #     raise ValueError("Student must have a classroom before saving")
         if not self.admission_number:
             self.admission_number = generate_unique_admission_number(self.school.tag)
         super().save(*args, **kwargs)

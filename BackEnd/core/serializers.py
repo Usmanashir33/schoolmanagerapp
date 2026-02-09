@@ -9,8 +9,14 @@ from director.models import Director
 from parent.models import Parents 
 from staff.models import Staff
 from subject .models import Subject
+from core .models import BankDetails 
 from authUser.serializers import MiniUserSerializer
-    
+
+class BankSerializer(serializers.ModelSerializer) : 
+    class Meta:  
+        model = BankDetails 
+        fields ='__all__'
+        read_only_fields = ['id', 'created_at']
 class ClassRoomSerializer(serializers.ModelSerializer) :
     class Meta:  
         model = ClassRoom 
@@ -19,23 +25,20 @@ class ClassRoomSerializer(serializers.ModelSerializer) :
         
 class SchoolSectionSerializer(serializers.ModelSerializer):
     classrooms = ClassRoomSerializer(many=True, read_only=True)
-    
     class Meta:  
         model = SchoolSection 
         fields ='__all__'
         read_only_fields = ['id', 'joined_at'] 
 class SchoolDeleteRequestSerialzer(serializers.ModelSerializer):
     classrooms = ClassRoomSerializer(many=True, read_only=True)
-    
     class Meta:  
         model = SchoolDeleteRequest
         fields ='__all__'
-        read_only_fields = ['id', 'requested_at'] 
+        read_only_fields = ['id', 'requested_at']  
 
 class SchoolSerializer(serializers.ModelSerializer):
-    sections = SchoolSectionSerializer(many=True, read_only=True) # sections and classroom
+    sections = SchoolSectionSerializer(many=True, read_only=True) # sections full and classroom full data
     delete_requests = SchoolDeleteRequestSerialzer(read_only = True)
-    
     total_teachers = serializers.SerializerMethodField()
     total_students = serializers.SerializerMethodField()
     total_staffs = serializers.SerializerMethodField()
@@ -100,7 +103,7 @@ class StudentSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)
     class Meta:
         model = Student
-        fields = '__all__'
+        fields = '__all__' 
 
 class ParentsSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)

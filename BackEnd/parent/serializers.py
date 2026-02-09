@@ -16,4 +16,10 @@ class MiniParentsSerializer(serializers.ModelSerializer):
         model = Parents
         fields = '__all__'
         read_only_fields = ['id', 'joined_at']                      
+class ParentsSerializer(serializers.ModelSerializer):
+    user = MiniUserSerializer(read_only=True)
+    class Meta:
+        model = Parents
+        fields = '__all__'
+        read_only_fields = ['id', 'joined_at']                      
                   

@@ -133,6 +133,7 @@ class RetriveOrGenOTPView(APIView) :
             user_found = request.user.is_authenticated
             retrive_opt = True if user_found else False 
             
+            operation_mode = None
             if not user_found : # user not logged in 
                 username_field = request.data['username_field']
                 operation_mode = request.data.get('operation_mode',None)
@@ -180,7 +181,7 @@ class RetriveOrGenOTPView(APIView) :
 class LoginRequestView(APIView):
     permission_classes =[permissions.AllowAny]
     def post(self, request, *args, **kwargs):
-        try :
+        # try :
             username_field = request.data.get('username_field',None)
             # username_field = username_field.lower() if username_field else None
             print('username_field: ', username_field)
@@ -296,8 +297,8 @@ class LoginRequestView(APIView):
                     },status=status.HTTP_200_OK) 
             else :
                return Response({'error':'login failed!'},status=status.HTTP_200_OK)
-        except :
-            return Response({"error":"server went wrong"})
+        # except :
+            # return Response({"error":"server went wrong"})
 class SearchUserView(APIView):
     def post(self, request):
         try:
@@ -320,6 +321,70 @@ class SearchUserView(APIView):
 # if authenticated we need , current password , and otp
 # if not authenticated we need username field to find the user and otp
 # OTP will also be sent to their resfective email before changing the password
+class PINChangeView(APIView):
+    def post( self, request,format=None ):
+        try:
+            user = request.user
+            authenticated_user = user.is_authenticated
+            
+            # fields required 
+            username_field = request.data.get('email',None) # for reset
+            current_password = request.data.get('currentPin',None) # for change
+            password1 = request.data.get('pin1',None) # for Change and reset
+            password2 = request.data.get('pin2',None) # for Change and reset
+            otp = request.data.get('otp',None) #  for Change and reset is required at final step 
+            operation_mode = request.data.get('operation_mode','reset') # reset or change
+            if not user.email == username_field :
+                return Response({"error":"invalid email "},status=status.HTTP_200_OK)
+            
+            if (len(password1) < 4) :
+                return Response({"error":"new pins must be > 4 "},status=status.HTTP_200_OK)
+            if not (password1 == password2) :
+                return Response({"error":"New pins Mismatched"},status=status.HTTP_200_OK)  
+            
+            # ------------------------  change operation    ----------------------
+            if operation_mode == 'change' :
+                if not authenticated_user :
+                    return Response({"error":"user not authenticated"},status=status.HTTP_200_OK)
+                else :
+                    # verify and change password
+                    if (not user.pins.checkPin(current_password)) :
+                        return Response({"error":"Wronge Pin!"},status=status.HTTP_200_OK)
+                    # verify the otp 
+                    if (not user.verificationcode.checkCode(otp) or user.verificationcode.is_expired()) :
+                        return Response({"error":"invalid/expired otp"},status=status.HTTP_200_OK)
+                    user.set_password(password1)
+                    user.save()
+            
+            # -------------------- reset operation dont force authentication ----------------
+            elif operation_mode == 'reset' :
+                # find the user from field 
+                user = find_user_by_email_username(username_field) 
+                if not user : # user not found by the given info 
+                    return Response({
+                        'error' : 'user not found!',
+                    },status=status.HTTP_200_OK)
+                    
+                if (not user.verificationcode.checkCode(otp) or user.verificationcode.is_expired()) :
+                        return Response({"error":"invalid/expired otp"},status=status.HTTP_200_OK)
+                user.pins.setPin(password1)
+                print('password1: ', password1)
+                # user.save()
+            else :
+                return Response({"error":"invalid operation mode"},status=status.HTTP_200_OK) 
+            # send email here 
+            try:
+                html_content = generate_login_email(user.username,'')
+                send_html_email.delay(
+                    subject="🔐 pin Changed",
+                    to_email=user.email,
+                    html_content=html_content
+                )
+            except :
+                pass
+            return Response({"success":"Pin Changed","mode":operation_mode},status=status.HTTP_200_OK)
+        except :
+           return Response({"error":"server went wrong"},status=status.HTTP_408_REQUEST_TIMEOUT)
 class PasswordChangeView(APIView):
     # permission_classes =[permissions.AllowAny]
     def post( self, request,format=None ):

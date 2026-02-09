@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import (TokenObtainPairView,TokenRefreshView,)
 
 from .views import RetriveOrGenOTPView,RegisterVerifyView ,LoginRequestView,CurrentUserView
-from .views import PasswordChangeView,SearchUserView,ProfileUpdateView
+from .views import PasswordChangeView,PINChangeView,SearchUserView,ProfileUpdateView
 # from .views import PinChangeView,ManageUserLogin
 
 urlpatterns = [
@@ -13,6 +13,7 @@ urlpatterns = [
     
     # password end points 
     path('password-change/',PasswordChangeView.as_view(),name='password-change'), #Tasted
+    path('pin-change/',PINChangeView.as_view(),name='pin-change'), #Tasted
     
     # pin endpoints  
     # path('pin-change/',PinChangeView.as_view(),name='pin-change'),

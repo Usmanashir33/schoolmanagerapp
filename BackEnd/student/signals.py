@@ -14,7 +14,7 @@ def generate_random_password(length=8):
     chars = string.ascii_letters + string.digits
     return ''.join(random.choices(chars, k=length))
 
-@receiver(pre_save, sender=Student)
+@receiver(post_save, sender=Student)
 def create_student_user(sender, instance, **kwargs):
     if not instance.user_id:
         if not instance.email:
