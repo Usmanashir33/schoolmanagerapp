@@ -13,6 +13,8 @@ https://docs.djangoSchoolManagerProject.com/en/5.1/ref/settings/
 from calendar import month
 from pathlib import Path
 import os 
+from decouple import config  # Or use os.getenv()
+
 
 # Build paths inside the SchoolManagerProject like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,11 +29,12 @@ SECRET_KEY = 'django-insecure-m)-^f(0%i(w1_j3@slrgx7e2w&)il*^if#st05g0t+#zb2b96o
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1','localhost','192.168.203.26','192.168.18.18','197.210.53.209','197.210.53.209:5173']
+ALLOWED_HOSTS = ["*"]
 
 # Application definition
 INSTALLED_APPS = [
-    # "daphne",
+    "daphne",
+    "django_celery_results",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -43,20 +46,24 @@ INSTALLED_APPS = [
     "corsheaders",
     'rest_framework',
     'rest_framework_simplejwt', 
+    "anymail", # for brevo setup 
     # 'channels', 
     
     # custom apps 
-    'core',
-    'authUser',
-    'director',
-    'school',
-    'section',
-    'classroom',
-    'student',
-    'teacher',
-    'staff',
-    'parent',
-    'subject',
+    'core' ,
+    'authUser' ,
+    'director' ,
+    'school' ,
+    'section' ,
+    'classroom' ,
+    'student'  ,
+    'teacher' ,
+    'staff' ,
+    'parent' ,
+    'subject' ,
+    'finance' ,
+    'result' ,
+    'attendanceanddevices' ,
 ]
 
 MIDDLEWARE = [
@@ -107,7 +114,6 @@ CORS_ALLOWED_ORIGIN_ALL = True
 
 CSRF_TRUSTED_ORIGINS = [
    'http://192.168.203.26:5173',  # Replace with your ngrok URL
-   'http://197.210.53.209:5173',  # Replace with your ngrok URL
    'http://192.168.18.18',  # Replace with your ngrok URL
 ]
 ALLOWED_HOSTS = ['*']  # for dev only; replace with your LAN IP or domain in prod
@@ -144,15 +150,35 @@ CHANNEL_LAYERS = {
     },
 }
 
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+
 
 
 # Database
 # https://docs.djangoSchoolManagerProject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
+    # 'default': {
+    #     'ENGINE': 'django.db.backends.sqlite3',
+    #     'NAME': BASE_DIR / 'db.sqlite3',
+    # },
+    
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config("DB_NAME"),
+        'USER': config("DB_USER"),
+        'PASSWORD': config("DB_PASSWORD"),
+        'HOST': '127.0.0.1',
+        'PORT': '8002', # i set the local postegree to use this port it run auto matically on wondows start 
     }
 }
 # Password validation
@@ -204,21 +230,39 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = "authUser.User"
 
 # Email Configurations
-from decouple import config  # Or use os.getenv()
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL")
+# EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"    for development environment 
+
+#------------------------------------------------------------------------------------------------------
+#                                       SMTP EMAIL CONFIGURATION
 EMAIL_HOST = 'smtp.gmail.com' 
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = config('EMAIL_HOST_USER')  # Load from .env
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')  # Load from .env
-DEFAULT_FROM_EMAIL = 'noreflyfentech@gmail.com'
-# for dev and production 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
-# fake in console for development 
-# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+#------------------------------------------------------------------------------------------------------
+#                         BREVO CONFIGURATIONS
+#------------------------------------------------------------------------------------------------------
+EMAIL_BACKEND = "anymail.backends.brevo.EmailBackend"
+BREVO_API_KEY = config("BREVO_API_KEY")
+ANYMAIL = {
+    "BREVO_API_KEY": BREVO_API_KEY,
+}
 
+#------------------------------------------------------------------------------------------------------
+#                         TERMII CONFIGURATIONS
+#------------------------------------------------------------------------------------------------------
+TERMII_API_KEY = config("TERMII_API_KEY")
+TERMII_SENDER_ID = config("TERMII_SENDER_ID")
 
-# CELERY SETTINGS
+#------------------------------------------------------------------------------------------------------
+#                         CELERY CONFIGURATIONS
+#------------------------------------------------------------------------------------------------------
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'django-db' 
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_BACKEND = 'django-db' # cause i use  django-celery-result app for sroring tasks results 
+# broker_connection_retry_on_startup = True

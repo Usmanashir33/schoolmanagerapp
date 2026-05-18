@@ -16,9 +16,9 @@ GENDER_CHOICES = (
     ('female', 'Female'),
     ('other', 'Other'), 
 )
-# Create your models here.
+# Create your models here. 
 class Parents(models.Model):
-    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
     user = models.OneToOneField(User, on_delete=models.SET_NULL,blank=True,related_name='parent', null=True)
     full_name = models.CharField(blank = True ,max_length=100,)
     email = models.EmailField(unique=True) 

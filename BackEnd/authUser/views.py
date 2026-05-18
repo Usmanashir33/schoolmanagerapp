@@ -1,9 +1,4 @@
-from functools import partial
-# from logging import raiseExceptions
 import os ,random,re
-from datetime import timedelta
-from tabnanny import check
-
 from django.shortcuts import render
 from django.urls import reverse
 from django.shortcuts import get_object_or_404
@@ -13,7 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken  # or your preferred JW
 # views.py or any view file
 from core.serializers import DirectorSerializer, ParentsSerializer, StudentSerializer, TeacherSerializer,StaffSerializer
 from core.emails.email_templates.emails import generate_otp_email,generate_login_email,generate_registration_email
-from core.emails.utils.email_service import send_html_email
+from core.tasks import send_html_email,send_ordinary_sms
 
 
 from .serializers import UserSerializer, MiniUserSerializer
@@ -60,13 +55,12 @@ def find_user_by_email_username(input_value) -> User | None:
         return user
 
     else : # username is given check if student or staff or teacher or parent
-        print(input_value)
         user = User.objects.filter(username = input_value).first()
         return user
 
 # it requires email,otp sent and password to provide acesss token for the user
 # create account and varify email and activate the user 
-class RegisterVerifyView(APIView):
+class RegisterVerifyView(APIView) :
     permission_classes=[permissions.AllowAny]
     def post(self, request, format=None):
         try:
@@ -78,43 +72,44 @@ class RegisterVerifyView(APIView):
             user = find_user_by_email_username(username_field) 
             if not user : # user not found by the given info 
                 return Response({'error' : 'User not found!',},status=status.HTTP_200_OK)
+            
             authenticated = user.verificationcode.checkCode(email_verification_code)
-             # heck if otp is not expired in 10mints 
+             # check if otp is not expired in 10mints 
             if user.verificationcode.is_expired():
                     return Response({'error' : 'otp has expired! request another ',},status=status.HTTP_200_OK)
             
             if user and authenticated  : # verify the Email now 
                 user.email_varified = True
-                user.is_active = True 
-                # change verification code (optional)
-                user.verificationcode.setCode(generate_5_otp())
+                
+                # user.is_active = True 
+                user.verificationcode.setCode(generate_5_otp())  # change verification code (optional)
                 user.save()
                 
                 # check if its valid password 
                 if not user.check_password(password) :
                     return Response({"error":'wronge password!'},status=status.HTTP_200_OK)
                 
-                tokens = create_jwt_tokens_for_user(user)
                 #we send email here for a user successful account creation
                 #send email here 
                 try:
                     html_content = generate_registration_email(user.username,'')
                     send_html_email.delay(
-                        subject="🔐 Wellcome to the App",
+                        subject="🔐 Wellcome to the EduPortal",
                         to_email=user.email,
                         html_content=html_content
                     )
                 except :
                     pass
+                
+                tokens = create_jwt_tokens_for_user(user)
                 data = serialize_with_role(user,user.role)
                 if not data :
-                    return Response({'error' : "user role data not found!"},status=status.HTTP_200_OK)
+                    return Response({'error' : "user role data not found!"}, status=status.HTTP_200_OK)
                 return Response({ # Email verified
-                    'success' : " Email verified",
-                    'data' : {"role":user.role,"tokens":tokens, "data":data}
+                    'success' : " Email verified ",
+                    'logged_user' : {"role":user.role,"tokens":tokens, "data":data}
                 },status=status.HTTP_201_CREATED)
             else :
-                # print('failed verification ')
                 return Response({'error' : "authentication failed!"},status=status.HTTP_200_OK)
         except :
            return Response({"error":"server went wrong"},status=status.HTTP_200_OK)
@@ -163,34 +158,32 @@ class RetriveOrGenOTPView(APIView) :
                     try:
                         html_content = generate_otp_email(user.username,email_verification_code)
                         send_html_email.delay(
-                            subject="🔐 Your Fentech OTP Code",
+                            subject="🔐 Your SCHOOL OTP Code",
                             to_email=user.email,
-                            html_content=html_content
+                            html_content=html_content 
                         )
                     except :
                         pass
                         # return Response({"error":"OTP not Sent!"},status=status.HTTP_200_OK)
-                    print(' retrived :  ',email_verification_code)
+                    print(' retrived :  ',email_verification_code,user.email)
                     return Response({"success":"otp_sent",},status=status.HTTP_200_OK)
         except:
             return Response({"error":"server went wrong"},status=status.HTTP_200_OK)
         
 # the view check if email or id for login matches the password 
-# will send the otp if user enable otp upon login ,also   if otp is provided then will login the user (2 possible request with otp and without)
+# will send the otp if user enable otp upon login ,also   if otp is provdockerided then will login the user (2 possible request with otp and without)
 # also if no otp requred on login if credentials are verified it will provide access token as login details 
 class LoginRequestView(APIView):
     permission_classes =[permissions.AllowAny]
     def post(self, request, *args, **kwargs):
-        # try :
+        try :
             username_field = request.data.get('username_field',None)
-            # username_field = username_field.lower() if username_field else None
-            print('username_field: ', username_field)
             password = request.data.get('password',None)
             otp = request.data.get('otp',None)
             
             user = find_user_by_email_username(username_field) 
             if not user : # user not found by the given info 
-                 return Response({'error' : 'User details not found!',},status=status.HTTP_200_OK)
+                 return Response({'error' : 'User not found!',},status=status.HTTP_200_OK)
            
             #---------------------user found ------------------------
             verified_password = user.check_password(password) 
@@ -198,7 +191,7 @@ class LoginRequestView(APIView):
                     return Response ({'error':'wrong password!',} , status = status.HTTP_200_OK )
                     
             if not user.email_varified :
-                # user exists but unverified email(incomplate registration )
+                # user exists but unverified email(incomplate registration) or registered by school admin
                 email_verification_code = generate_5_otp()
                 verification_obj, created = VerificationCode.objects.get_or_create(user=user)
                 verification_obj.setCode(email_verification_code)
@@ -207,17 +200,17 @@ class LoginRequestView(APIView):
                 try:
                     html_content = generate_otp_email(user.username,email_verification_code)
                     send_html_email.delay(
-                        subject="🔐Verify  Your Fentech Email with  Code",
+                        subject="🔐Verify Email",
                         to_email=user.email,
                         html_content=html_content
                     )
                 except :
-                    pass
-                    # return Response({'error':'Otp not sent '},status=status.HTTP_200_OK)
+                    return Response({'error':'Otp not sent '},status=status.HTTP_200_OK)
                         
                 print(email_verification_code) 
                 return Response({
-                    "success":"incomplete_registration",
+                    "success":"Incomplete Registration / Unverified Email. Please complete your registration",
+                    "incomplete_registration":"incomplete_registration",
                     'email' :user.email,
                     "redirect_to": reverse("register-verify")
                     },status=status.HTTP_200_OK)
@@ -231,11 +224,10 @@ class LoginRequestView(APIView):
                 verification_obj.save()
                 print('generated_otp: ', generated_otp)
                 # we will send otp to the user email
-                # send otp here 
                 try:
                     html_content = generate_otp_email(user.username,generated_otp)
                     send_html_email.delay(
-                        subject="🔐 Your EDUPORTAL Login OTP Code",
+                        subject="🔐 EduPortal Login OTP Code",
                         to_email=user.email,
                         html_content=html_content
                     )
@@ -243,12 +235,18 @@ class LoginRequestView(APIView):
                     pass
                 
                 return Response ({
-                    'success':'otp_sent',
+                    'success':'OTP has been sent to your email',
+                    'otp_sent':'otp_sent',
                     'user_email' : f'{user.email}',
                     "redirect_to" : reverse('login-requests') 
                 },status= status.HTTP_200_OK)
                 
             elif user.otp_required and otp : #otp is obtained 
+                # check if user is active to login 
+                if user and not user.is_active : # account inactive
+                    return Response({
+                        'error' : 'user is inactive contact support!',
+                    },status=status.HTTP_200_OK) 
                 if user.verificationcode.checkCode(otp): # otp verified
                     # check if otp is not expired in 10mints 
                     if user.verificationcode.is_expired():
@@ -261,25 +259,21 @@ class LoginRequestView(APIView):
                     try:
                         html_content = generate_login_email(user.username,'')
                         send_html_email.delay(
-                            subject="🔐 Account login",
+                            subject="🔐 Eduportal Account logged",
                             to_email=user.email,
                             html_content=html_content
                         )
                     except :
                         pass
-                    # check if user is active to login 
-                    if user and not user.is_active : # account inactive
-                        return Response({
-                            'error' : 'user is inactive contact support!',
-                        },status=status.HTTP_200_OK) 
+                    
                     # generate this user access tokens 
                     tokens = create_jwt_tokens_for_user(user)
                     data = serialize_with_role(user,user.role)        
                     if not data :
                         return Response({'error' : "user role data not found!"},status=status.HTTP_200_OK)
                     return Response({
-                        'success' : 'Login Successfully ',
-                        'data' : {"role":user.role,"tokens":tokens,"data":data},
+                        'success' : 'Account Login Successfully ',
+                        'logged_user' : {"role":user.role,"tokens":tokens,"data":data},
                     },status=status.HTTP_200_OK)
                 else :
                     return Response({"error":"invalid otp"},status=status.HTTP_200_OK)
@@ -292,13 +286,13 @@ class LoginRequestView(APIView):
                     if not data :
                         return Response({'error' : "user role data not found!"},status=status.HTTP_200_OK)
                     return Response({
-                        'success' : 'Login Successfully ',
-                        'data' : {"role":user.role, "tokens":tokens,"data":data},
+                        'success' : 'Account Login Successfully ',
+                        'logged_user' : {"role":user.role,"tokens":tokens,"data":data},
                     },status=status.HTTP_200_OK) 
             else :
                return Response({'error':'login failed!'},status=status.HTTP_200_OK)
-        # except :
-            # return Response({"error":"server went wrong"})
+        except :
+            return Response({"error":"server went wrong"})
 class SearchUserView(APIView):
     def post(self, request):
         try:
@@ -306,7 +300,6 @@ class SearchUserView(APIView):
             search = request.data.get('search',None)
             user = find_user_by_email_username(search)
             if user is None : 
-                print('user not found try his Account_id')
                 user = User.objects.filter(account__account_id = search).first()
             if user :
                 user = UserSerializer(user).data

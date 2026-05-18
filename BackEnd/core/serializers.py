@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from school.models import School,SchoolDeleteRequest
+from school.serializers import TermSerializer, SessionSerializer
 from section.models import SchoolSection
 from student.models import Student
 from teacher.models import Teacher
@@ -37,18 +38,25 @@ class SchoolDeleteRequestSerialzer(serializers.ModelSerializer):
         read_only_fields = ['id', 'requested_at']  
 
 class SchoolSerializer(serializers.ModelSerializer):
+    logo = serializers.SerializerMethodField(read_only =True)
     sections = SchoolSectionSerializer(many=True, read_only=True) # sections full and classroom full data
+    terms = TermSerializer(read_only=True,many=True)
+    sessions = SessionSerializer(read_only=True,many=True)
     delete_requests = SchoolDeleteRequestSerialzer(read_only = True)
-    total_teachers = serializers.SerializerMethodField()
-    total_students = serializers.SerializerMethodField()
-    total_staffs = serializers.SerializerMethodField()
-    total_classrooms = serializers.SerializerMethodField()
-    total_parents = serializers.SerializerMethodField() 
-    total_sections = serializers.SerializerMethodField()
+    
+    total_teachers = serializers.SerializerMethodField(read_only = True)
+    total_students = serializers.SerializerMethodField(read_only = True)
+    total_staffs = serializers.SerializerMethodField(read_only = True)
+    total_classrooms = serializers.SerializerMethodField(read_only = True)
+    total_parents = serializers.SerializerMethodField(read_only = True) 
+    total_sections = serializers.SerializerMethodField(read_only = True)
     class Meta:  
         model = School
         fields ='__all__'
-        read_only_fields = ['id', 'joined_at']
+        read_only_fields = ['id', 'joined_at','ref_id','director']
+        
+    def get_logo(self, obj):
+        return obj.logo.url if obj.logo else None
     
     def get_total_teachers(self, obj):
         return obj.teachers.all().count()
@@ -69,10 +77,33 @@ class SchoolSerializer(serializers.ModelSerializer):
         total_classrooms = ClassRoom.objects.filter(section__school=obj).count()
         return total_classrooms
     
+    def update(self, instance, validated_data):
+        request = self.context['request']
+        logo = request.FILES.get("logo")
+        
+
+        # update only provided fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        if logo :
+            instance.logo = logo
+
+        # save updated instance
+        instance.save()
+
+        return instance
+        
+    
+    
 # --------------Director Role ------------------
-class DirectorSerializer(serializers.ModelSerializer):
+class DirectorSerializer(serializers.ModelSerializer): 
+    picture = serializers.SerializerMethodField()
     user = MiniUserSerializer(read_only=True)
     directorschools = SchoolSerializer(many=True, read_only=True)
+    def get_picture(self, obj):
+
+        return obj.picture.url if obj.picture else None
     class Meta:  
         model = Director 
         fields ='__all__'

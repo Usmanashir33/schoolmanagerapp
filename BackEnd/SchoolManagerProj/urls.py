@@ -46,4 +46,7 @@ urlpatterns = [
     path('school/',include("school.urls")),
     path('student/',include("student.urls")),
     path('director/',include("director.urls")),
+    path('result/',include("result.urls")),
+    path('school_finance/',include("finance.urls")),
+    path('a_d/',include("attendanceanddevices.urls")),
 ]  + static(settings.STATIC_URL,document_root=settings.STATIC_ROOT) + static(settings.MEDIA_URL,document_root=settings.MEDIA_ROOT)

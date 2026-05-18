@@ -34,6 +34,9 @@ env/
 /.env/
 .env/
 .venv/
+.env
+*.env
+BackEnd/.env
 
 # Editors & OS files
 .vscode/

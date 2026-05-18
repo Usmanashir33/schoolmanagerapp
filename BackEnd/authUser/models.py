@@ -37,6 +37,8 @@ class User(AbstractUser):
     email =models.EmailField(_("Email"),unique=True,max_length=254)
     picture= models.ImageField(_("user pic"), upload_to= upload_user_image,default='default.png')
     role = models.CharField(_("role"), max_length=50,blank=True,default='Admin')
+    school_role = models.ForeignKey('school.SchoolRole', on_delete=models.SET_NULL,null=True, blank=True,related_name='users')
+    school = models.ForeignKey('school.School', on_delete=models.CASCADE,related_name='users')
     gender = models.CharField(_("gender"), max_length=10, choices=GENDER, blank=True)
     date_joined = models.DateTimeField(_("date joined"), auto_now_add=True) 
     
@@ -54,7 +56,7 @@ class User(AbstractUser):
         choices=VERIFICATION_STATUS,default=' UNVERIFIED ',
     ) 
     kyc_confirmed = models.BooleanField(_(" kyc varified "),default=False)
-    email_varified = models.BooleanField(_("varified email"),default=False)
+    email_varified = models.BooleanField(_("varified email"),default=False) 
     
     # security
     otp_required = models.BooleanField(_("OTP Required"),default=True)
@@ -67,7 +69,7 @@ class User(AbstractUser):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username'] 
-
+    
     class Meta :
         verbose_name = 'User'
         verbose_name_plural = 'Users'
@@ -77,6 +79,27 @@ class User(AbstractUser):
     
     def show_id(self) :   
         return  f"{str(self.id)[:6]}..."
+    
+    def has_permission(self, permission_names: list[str]) -> bool:
+        role = self.school_role
+
+        if not role or not permission_names:
+            return False
+
+        existing_permissions = set(
+            role.permissions.filter(
+                name__in=permission_names
+            ).values_list("name", flat=True)
+        )
+        return existing_permissions == set(permission_names)
+    
+    # handle the verification code sent to the email 
+    def setVerificationCode(self,row_pin):
+        self.email_verification_code = make_password(str(row_pin))
+        self.save()
+        
+    def checkVerificationCode(self,row_pin):
+        return check_password(row_pin,self.email_verification_code)
     
     # handle the verification code sent to the email 
     def setVerificationCode(self,row_pin):
@@ -208,7 +231,7 @@ class VerificationCode(models.Model):
         verbose_name_plural = 'UserCode' 
    
 class PendingEmail(models.Model):
-    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=255)
     email = models.EmailField(_("Email"),unique=True,max_length=254)
     verification_code = models.CharField(_("Verification Code"), max_length=255 ,blank=True,null=True)
     created_at = models.DateTimeField(auto_now_add =True,)

@@ -1,0 +1,39 @@
+
+services:
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  web:
+    build: .
+    container_name: django
+    command: python manage.py runserver 0.0.0.0:8001
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+
+  worker:
+    build: .
+    container_name: celery_worker
+    command: celery -A SchoolManagerProj worker --loglevel=info --pool=solo --concurrency=1
+    env_file:
+      - .env
+    depends_on:
+      - redis
+
+  # beat:
+  #   build: .
+  #   container_name: celery_beat
+  #   command: celery -A SchoolManagerProj beat --loglevel=info
+  #   depends_on:
+  #     - redis

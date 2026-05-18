@@ -11,11 +11,17 @@ class ActivityRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = ActivityRole
         fields = '__all__' 
-class StaffSerializer(serializers.ModelSerializer):
+class StaffSerializer(serializers.ModelSerializer): 
     user = MiniUserSerializer(read_only=True)
     class Meta:
         model = Staff
         fields = '__all__' 
+class MiniStaffSerializer(serializers.ModelSerializer):  # for web sockets 
+    user = MiniUserSerializer(read_only=True)
+    class Meta:
+        model = Staff
+        fields = '__all__' 
+        read_only_fields = ['id',]
         
 class StaffDetailSerializer(serializers.ModelSerializer):
     picture        = serializers.SerializerMethodField()

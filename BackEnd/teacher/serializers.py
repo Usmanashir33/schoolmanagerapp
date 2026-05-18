@@ -8,23 +8,42 @@ from classroom.models import ClassRoom
 from section.models import SchoolSection
 from core.serializers import ClassRoomSerializer,BankSerializer
 import json
+from .models import DisplinaryRecord
 
+class DisplinaryRecordSerializer(serializers.ModelSerializer ) :
+    class Meta:
+        model = DisplinaryRecord
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at']
+        
+class DisplinaryRecordIDSerializer(serializers.ModelSerializer ) :
+    class Meta:
+        model = DisplinaryRecord
+        fields = ['id',]
+        
 class TeacherSerializer(serializers.ModelSerializer): 
     user = MiniUserSerializer(read_only=True)
     bank_details = BankSerializer(read_only = True )
+    disciplinaryRecords = DisplinaryRecordSerializer(read_only=True,many=True,)
     
     class Meta:  
         model = Teacher 
         fields ='__all__'
         read_only_fields = ['id', 'joined_at']
+class MiniTeacherSerializer(serializers.ModelSerializer):  # for websocket 
+    user = MiniUserSerializer(read_only=True)
+    class Meta:  
+        model = Teacher 
+        fields ='__all__'
+        read_only_fields = ['id',]
  
 
 class TeacherDetailSerializer(serializers.ModelSerializer):
     picture = serializers.SerializerMethodField()
     user = MiniUserSerializer(read_only = True)
     bank_details = BankSerializer(read_only = True )
-    # class_room = ClassRoomSerializer(many=True,read_only = True)
-
+    disciplinaryRecords = DisplinaryRecordIDSerializer(read_only=True,many=True,)
+    
     class Meta:
         model = Teacher
         fields = "__all__"

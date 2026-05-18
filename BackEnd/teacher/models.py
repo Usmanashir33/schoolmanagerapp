@@ -30,8 +30,26 @@ from django.db import models
 
 
 # Create your models here.
+class DisplinaryRecord(models.Model):
+    SEVERITY_CHOICES = (
+        ('Low', 'Low'),
+        ('Medium', 'Medium'),
+        ('High', 'High'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    teacher = models.ForeignKey("Teacher", on_delete=models.SET_NULL, related_name="disciplinaryRecords",null=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    severity = models.CharField(max_length=10,choices=SEVERITY_CHOICES,default='Low'
+    )
+    created_at = models.DateTimeField(auto_now_add=True) 
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.title} ({self.severity})"
 class Teacher(models.Model) :
-    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
     user = models.OneToOneField(User, on_delete=models.SET_NULL,blank=True,related_name='teacher', null=True)
     
     first_name = models.CharField(max_length=100,)
@@ -45,11 +63,11 @@ class Teacher(models.Model) :
     phone = models.CharField(max_length=20, blank=True)
     
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="teachers")
-    class_room = models.ManyToManyField(ClassRoom ,related_name="teachers", blank=True,symmetrical=False,)
-    # form_class = models.ForeignKey(ClassRoom, on_delete=models.SET_NULL, null=True, blank=True,related_name = 'form_teacher')
+    class_room = models.ManyToManyField(ClassRoom,  related_name="teachers", blank=True,symmetrical=False,)
+    form_class = models.ForeignKey(ClassRoom, on_delete=models.SET_NULL, null=True, related_name="form_teacher", blank=True)
     
     role = models.CharField(max_length=50,default='Teacher')      
-    nin = models.CharField(max_length=50,blank=True)     
+    nin = models.CharField(max_length=50,blank=True)      
     salary = models.CharField(blank=True,max_length=20,)     
     bank_details = models.OneToOneField(BankDetails,on_delete=models.SET_NULL,related_name= 'user',blank=True,null=True)
     
@@ -62,4 +80,4 @@ class Teacher(models.Model) :
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.user.username
+        return self.user.username if self.user else "Anonymous Teacher"  

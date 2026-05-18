@@ -2,7 +2,7 @@ from .base_email import base_email_template
 
 def generate_otp_email(user_name: str, otp: str) -> str:
     content = f"""
-        <p>Hello <strong>{user_name}</strong>,</p>
+        <p>Hello <strong>{user_name}</strong>,</p> 
         <p>Your one-time password (OTP) is:</p>
         <p style='text-align:center'>
             <span class="otp" onclick="copyOTP('{otp}')">{otp}</span>
@@ -11,24 +11,24 @@ def generate_otp_email(user_name: str, otp: str) -> str:
     """
     return base_email_template(content, title="Your OTP Code")
 
-def generate_registration_email(name: str, ) -> str:
+def generate_registration_email(email:str ,name: str, ) -> str:
     content = f"""
         <p>Hello <strong>{name}</strong>,</p>
-        <p>🎉 Your registration on <strong>MySchool</strong> was successful!</p>
-        <p>Kindle note </p>
+        <p>🎉 Your registration on <strong>EduPortal</strong> was successfull!</p>
+        <p>Kindly note: </p>
         <p style="text-align:center;">
-            you can access your dashbord using your Director email and password you provided during registration 
+            you can access your dashbord using your Director email {email[:5]}****{email[-8:-1]} and password you provided during registration 
         </p>
     """
-    return base_email_template(content, title="Welcome to MySchool !")
+    return base_email_template(content, title="Welcome to eduportal services !")
 
 def generate_login_email(user_name: str, dashboard_url: str) -> str:
     content = f"""
         <p>Dear <strong>{user_name}</strong>,</p>
-        <p>🎉 Your login request <strong>Fentech</strong> is successful!</p>
+        <p>🎉 Your login request <strong>EduPortal</strong> is successfull!</p>
         <p>if you dont initiate it  contact support!</p>
         <p style="text-align:center;">
-            <a href="{dashboard_url}" class="button">Go to Dashboard</a>
+            <a href="{dashboard_url} class="button">Go to Dashboard</a>
         </p>
     """
     return base_email_template(content, title="Welcome to Fentech!")

@@ -5,6 +5,7 @@ from django.core.mail import send_mail
 
 from django.core.exceptions import ValidationError
 from .models import Teacher 
+from school.models import School,SchoolPermission, SchoolRole
 import string
 import random
 
@@ -19,18 +20,10 @@ def create_teacher_user(sender, instance, **kwargs):
     if not instance.user_id:
         if not instance.email:
             raise ValidationError("Teacher email is required to create a user.")
-        if not instance.staff_id:
-            raise ValidationError("Teacher staff number is required to create a user.")
         
         # check if email is unique
         email = instance.email
-        if User.objects.filter(email=email).exists():
-            raise ValidationError(f"Email {email} already exists.")
-        
         username = instance.staff_id
-        if User.objects.filter(username=username).exists():
-            raise ValidationError(f"Username {username} already exists.")
-
         password = f"STAFF-{instance.email.split('@')[0]}"
 
         user = User.objects.create(
@@ -42,6 +35,10 @@ def create_teacher_user(sender, instance, **kwargs):
             gender = instance.gender
         )
         user.set_password(password)
+        # get perfect role 
+        role = SchoolRole.objects.filter(school=instance.school, name="Teacher").first()
+        if role :
+            user.school_role = role
         user.save()
         instance.user = user
 

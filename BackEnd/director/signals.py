@@ -1,53 +1,50 @@
-from django.db.models.signals import pre_save, post_save
+from django.db.models.signals import pre_save, post_save,post_delete
 from django.dispatch import receiver
 from authUser.models import User
-from django.core.mail import send_mail
-
-from django.core.exceptions import ValidationError
 from .models import Director
-import string
-import random
+from school.models import School,SchoolPermission, SchoolRole
 
-def generate_random_password(length=8):
-    """Generate a random password with letters and digits"""
-    chars = string.ascii_letters + string.digits
-    return ''.join(random.choices(chars, k=length))
-
-
-# craete director 
-@receiver(pre_save, sender=Director) 
-def create_director_user(sender, instance, **kwargs):
-    if not instance.user_id:
-        if not instance.email:
-            raise ValidationError("Director email is required to create a user.")
-        # check if email is unique
-        email = instance.email
-        if User.objects.filter(email=email).exists():
-            raise ValidationError(f"Email {email} already exists.")
-        username = f"{instance.email.split('@')[0]}"
-
-        user = User.objects.create(
-            username=username,
-            first_name=instance.first_name,
-            last_name=instance.last_name,
-            middle_name = instance.middle_name,
-            email = instance.email,
-            phone_number = instance.phone,
-            role = instance.role,
-            gender = instance.gender,
-        ) 
+# update director 
+@receiver(post_save, sender=Director) 
+def update_director_user(sender, instance, **kwargs):
+    if instance.user_id:
+        user = instance.user
+        
+        user.username=instance.email
+        user.first_name=instance.first_name
+        user.last_name=instance.last_name
+        user.middle_name = instance.middle_name
+        user.email = instance.email
+        user.phone_number = instance.phone
+        user.role = instance.role
+        user.gender = instance.gender
         user.save()
-        instance.user = user
+        
+# # create permissions for director when school is created
+@receiver(post_save, sender=SchoolPermission) 
+def create_director_permission_settings(sender, instance, created ,**kwargs):
+    if created :
+        director = instance.school.director
+        if (
+                director and
+                director.user and
+                director.user.school_role and
+                director.user.school_role.name == "Director"
+            ):
+            director.user.school_role.permissions.add(instance)
+            director.user.save()
+# if permission is deleted 
+@receiver(post_delete, sender=SchoolPermission)
+def remove_director_permission_settings(  sender,  instance,  **kwargs): 
+    director = instance.school.director
 
-        # Send email with credentials
-        # send_mail(
-        #     subject='Your School Account',
-        #     message=f"Hello {instance.first_name},\n\n"
-        #             f"Your account has been created.\n"
-        #             f"Username: {username}\n"
-        #             f"Password: {password}\n\n"
-        #             "Please log in and change your password.",
-        #     from_email='noreply@yourschool.com',
-        #     recipient_list=[instance.email],
-        #     fail_silently=True
-        # )
+    if (
+        director and
+        director.user and
+        director.user.school_role and
+        director.user.school_role.name == "Director"
+    ):
+
+        director.user.school_role.permissions.remove(
+            instance
+        )

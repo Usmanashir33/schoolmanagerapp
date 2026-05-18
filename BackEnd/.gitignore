@@ -37,7 +37,8 @@ env/
 /.env/
 .env/
 .venv/
-
+.env
+*.env
 # Editors & OS files
 .vscode/
 .idea/

@@ -32,7 +32,7 @@ NSA_RANKS = (
 )
 # craete activity role model
 class ActivityRole(models.Model):
-    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
     role = models.CharField(max_length=100, choices=NSA_CHOICES, default='security')
     rank = models.CharField(max_length=100, choices=NSA_RANKS, default='standerd')
     active = models.BooleanField(default=True)
@@ -44,7 +44,7 @@ class ActivityRole(models.Model):
 
 # Create your models here.
 class Staff(models.Model) :
-    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=25)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
     user = models.OneToOneField(User, on_delete=models.CASCADE,blank=True,related_name='staff', null=True)
     
     first_name = models.CharField(max_length=100,)
