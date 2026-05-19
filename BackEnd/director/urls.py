@@ -27,15 +27,15 @@ urlpatterns = [
     # path('update-student/<str:student_id>/',DirectorStudentDetailView.as_view(), name='update-student'),#Tested
     # path('manage-student/<str:student_id>/<str:request_action>/', DirectorStudentAdministrationView.as_view(), name='manage-student'),#tasted
     
-    #------------------ Teacher --------------------------
-    path('add-teacher/',                      DirectorTeacherDetailView.as_view(),  name='add-teacher'),#Tested
-    path('all-teachers/<uuid:school_id>/',    DirectorAllTeachersView.as_view(), name='all-teacher'), 
-    path('search/teacher/<str:searchQuery>/', DirectorFilterTeacherDetailView.as_view(), name='search-teacher'),#Tested 
-    path('get-teacher/<uuid:teacher_id>/',    DirectorTeacherDetailView.as_view(), name='get-teacher'),#Tested 
-    path('update-teacher/<str:teacher_id>/',  DirectorTeacherDetailView.as_view(), name='update-teacher'),#Tested
-    path('manage-teacher/<str:teacher_id>/<str:request_action>/' ,DirectorTeacherAdministrationView.as_view(), name='manage-teacher'),#tasted
-    path('teacher-record/<str:teacher_id>/',  DirectorTeacherRecordView.as_view(), name='teacher-record-add'),
-    path('teacher-record/<str:teacher_id>/<str:report_action>/', DirectorTeacherRecordView.as_view(), name='teacher-record-update'),
+    # #------------------ Teacher --------------------------
+    # path('add-teacher/',                      DirectorTeacherDetailView.as_view(),  name='add-teacher'),#Tested
+    # path('all-teachers/<uuid:school_id>/',    DirectorAllTeachersView.as_view(), name='all-teacher'), 
+    # path('search/teacher/<str:searchQuery>/', DirectorFilterTeacherDetailView.as_view(), name='search-teacher'),#Tested 
+    # path('get-teacher/<uuid:teacher_id>/',    DirectorTeacherDetailView.as_view(), name='get-teacher'),#Tested 
+    # path('update-teacher/<str:teacher_id>/',  DirectorTeacherDetailView.as_view(), name='update-teacher'),#Tested
+    # path('manage-teacher/<str:teacher_id>/<str:request_action>/' ,DirectorTeacherAdministrationView.as_view(), name='manage-teacher'),#tasted
+    # path('teacher-record/<str:teacher_id>/',  DirectorTeacherRecordView.as_view(), name='teacher-record-add'),
+    # path('teacher-record/<str:teacher_id>/<str:report_action>/', DirectorTeacherRecordView.as_view(), name='teacher-record-update'),
     
     #------------------Staff--------------------------
     path('all-staffs/<uuid:school_id>/', DirectorAllStaffsView.as_view(), name='all-staff'), 

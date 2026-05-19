@@ -9,6 +9,9 @@ from section.models import SchoolSection
 from core.serializers import ClassRoomSerializer,BankSerializer
 import json
 from .models import DisplinaryRecord
+from school.models import ActivityLog
+from school.serializers import ActivityLogSerializer
+from school.tasks import SchoolServices
 
 class DisplinaryRecordSerializer(serializers.ModelSerializer ) :
     class Meta:
@@ -54,7 +57,7 @@ class TeacherDetailSerializer(serializers.ModelSerializer):
         if obj.picture:
             return obj.picture.url
         return None
-class TeacherDetailSerializer(serializers.ModelSerializer):
+class TeacherCreateSerializer(serializers.ModelSerializer):
     picture = serializers.SerializerMethodField()
     user = MiniUserSerializer(read_only = True)
     bank_details = BankSerializer(read_only = True )
@@ -92,7 +95,6 @@ class TeacherDetailSerializer(serializers.ModelSerializer):
                 teacher.bank_details = bank.instance
 
             if class_rooms:
-                print('class_rooms: ', class_rooms)
                 teacher.class_room.set(ClassRoom.objects.filter(id__in = class_rooms))
                 
             if picture_file:
@@ -122,7 +124,6 @@ class TeacherDetailSerializer(serializers.ModelSerializer):
                 
             bank = instance.bank_details
             if not bank : #create 
-                # print('bank: ', bank)
                 bank = BankSerializer(data =bank_data)
             else : # Update 
                 bank = BankSerializer(bank , data =bank_data,partial=True )
@@ -138,5 +139,21 @@ class TeacherDetailSerializer(serializers.ModelSerializer):
             if picture_file:
                 instance.picture = picture_file
             instance.save()
+             # configuring activity log data 
+             
+            new_log = ActivityLog.objects.create(
+                    school = instance.school,
+                    user=request.user,
+                    action="UPDATE",
+                    module="TEACHER",
+                    description=f"Teacher updated: {instance.staff_id} - {instance.full_name()}"
+                )
+            user_room = f"room{request.user.id}"
+            log_data = ActivityLogSerializer(new_log).data
+            data = {
+                    "type": "send_response1",
+                    "activity_log": log_data,
+                    }
+            SchoolServices.send_activity_log.delay(destination=user_room, data=data)
                 
         return instance 

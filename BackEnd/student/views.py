@@ -1,5 +1,4 @@
 
-from django.utils import timezone
 from django.db.models import Q
 from core.formatters import format_serializer_errors
 # from core.permissions import DirectorUserPermission
@@ -19,6 +18,8 @@ from school.models import ActivityLog, School
 from authUser.models import User
 from school.serializers import ActivityLogSerializer
 from django.core.cache import cache
+from django.utils import timezone
+
 
 #==================================================================================================            
 #                                       STUDENT SECTION                           
@@ -59,7 +60,7 @@ class AllStudentsView(APIView):
                     "class_rooms__class_room"
                 )
                 .order_by("joined_at")
-            )
+            ) 
 
             paginator = CustomPagination50()
 
@@ -75,7 +76,7 @@ class AllStudentsView(APIView):
 
             resp=paginator.get_paginated_response({
                 "success": "School students", 
-                "students_data": serializer
+                "paginated_data": serializer
             })
             cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
             end = timezone.now()
@@ -180,7 +181,7 @@ class StudentDetailView(APIView):
 
     # ---------------- UPDATE STUDENT -----------------
     def put(self, request,student_id):
-        # try : 
+        try : 
             pin = request.data.get("pin")
             school_id = request.data.get("school")
             
@@ -217,8 +218,8 @@ class StudentDetailView(APIView):
                 }, status=status.HTTP_200_OK)
 
             return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
-        # except Exception as e :
-            # return Response({"error": str(e) }, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": str(e) }, status=status.HTTP_200_OK)
 
 class StudentAdministrationView(APIView):
     # parser_classes = [MultiPartParser, FormParser]

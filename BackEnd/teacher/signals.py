@@ -18,9 +18,6 @@ def generate_random_password(length=8):
 @receiver(pre_save, sender=Teacher)
 def create_teacher_user(sender, instance, **kwargs):
     if not instance.user_id:
-        if not instance.email:
-            raise ValidationError("Teacher email is required to create a user.")
-        
         # check if email is unique
         email = instance.email
         username = instance.staff_id
@@ -28,6 +25,7 @@ def create_teacher_user(sender, instance, **kwargs):
 
         user = User.objects.create(
             username=username,
+            school = instance.school ,
             first_name=instance.first_name,
             last_name=instance.last_name,
             email = email,
@@ -36,7 +34,7 @@ def create_teacher_user(sender, instance, **kwargs):
         )
         user.set_password(password)
         # get perfect role 
-        role = SchoolRole.objects.filter(school=instance.school, name="Teacher").first()
+        role = SchoolRole.objects.filter(school_id=instance.school.id, name="Teacher").first()
         if role :
             user.school_role = role
         user.save()
@@ -59,22 +57,18 @@ def create_teacher_user(sender, instance, **kwargs):
 def delete_user_when_student_deleted(sender, instance, **kwargs):
     if instance.user:
         instance.user.delete()
+        
+        
 @receiver(post_save, sender=Teacher)
 def update_user_when_student_updated(sender, instance, created, **kwargs):
     if not created : # that means its update 
         email = instance.email
         user = instance.user
-        # check if email is unique
-        if not user.email == email and User.objects.filter(email=email).exists() :
-            # raise ValidationError(f"Email {email} already exists.")
-            pass
-        
         username = instance.staff_id
-        if not user.username == username and User.objects.filter(username=username).exists():
-            # raise ValidationError(f"Username {username} already exists.")
-            pass
+        
         
         user.first_name=instance.first_name 
+        user.username = username 
         user.last_name=instance.last_name 
         user.middle_name=instance.middle_name 
         user.email=email 
