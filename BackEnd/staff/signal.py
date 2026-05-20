@@ -1,9 +1,10 @@
-from django.db.models.signals import pre_save, post_save
+from django.core.cache import cache
+
+from django.db.models.signals import post_delete, pre_save, post_save
 from django.dispatch import receiver
 from authUser.models import User
 from django.core.mail import send_mail
 
-from django.core.exceptions import ValidationError
 
 from school.models import SchoolRole
 from .models import Staff ,ActivityRole
@@ -16,17 +17,24 @@ def generate_random_password(length=8):
     return ''.join(random.choices(chars, k=length))
 
 
+@receiver(post_save, sender=Staff)
+@receiver(post_delete, sender=Staff)
+def clear_staff_cache(sender, instance, **kwargs):
+    cache.delete_pattern(
+        f"staffs_{instance.school.id}_*"
+    )
+
 @receiver(pre_save, sender=Staff)
 def create_teacher_user(sender, instance, **kwargs):
     if not instance.user_id:
         # check if email is unique
         email = instance.email
-        
         username = instance.staff_id
         password = f"NAS-{instance.email.split('@')[0]}"
 
         user = User.objects.create(
             username=username,
+            school = instance.school,
             first_name=instance.first_name,
             last_name=instance.last_name,
             email = email,
@@ -34,24 +42,27 @@ def create_teacher_user(sender, instance, **kwargs):
             gender = instance.gender
         )
         user.set_password(password)
-        role = SchoolRole.objects.filter(school=instance.school, name="Staff").first()
-        if role :
-            user.school_role = role
-        user.save()
         instance.user = user
-
-        # Send email with credentials
-        # send_mail(
-        #     subject='Your School Account',
-        #     message=f"Hello {instance.first_name},\n\n"
-        #             f"Your account has been created.\n"
-        #             f"Username: {username}\n"
-        #             f"Password: {password}\n\n"
-        #             "Please log in and change your password.",
-        #     from_email='noreply@yourschool.com',
-        #     recipient_list=[instance.email],
-        #     fail_silently=True
-        # )
-
-
+        
+@receiver(post_delete, sender=Staff)
+def delete_user_when_staff_deleted(sender, instance, **kwargs):
+    if instance.user:
+        instance.user.delete()
+        
+@receiver(post_save, sender=Staff)
+def update_user_when_staff_updated(sender, instance, created, **kwargs) :
+    if not created :
+        if instance.user and instance.email : # that means its update 
+            email = instance.email
+            user = instance.user
+            username = instance.staff_id
+            
+            user.first_name=instance.first_name 
+            user.last_name=instance.last_name 
+            user.middle_name=instance.middle_name 
+            user.email=email 
+            user.username=username  
+            user.role = instance.role
+            user.gender = instance.gender 
+            user.save()
         

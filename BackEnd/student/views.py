@@ -98,7 +98,7 @@ class FilterStudentDetailView(APIView):
     def get(self, request,school_id,searchQuery):  
         try:
             valid_student  = Student.objects.filter(school__id = school_id).filter(
-                Q(id__icontains = searchQuery)  | Q(first_name__icontains = searchQuery) | Q(admission_number__icontains = searchQuery) |
+                Q(first_name__icontains = searchQuery) | Q(admission_number__icontains = searchQuery) |
                 Q(last_name__icontains = searchQuery)  | Q(middle_name__icontains = searchQuery) | Q(email__icontains = searchQuery) 
             )[:5]
             
@@ -119,13 +119,12 @@ class StudentDetailView(APIView):
         SchoolPermissions.CAN_VIEW_STUDENTS,
         SchoolPermissions.CAN_MANAGE_STUDENTS,
         SchoolPermissions.CAN_ADD_STUDENTS,
-        # 'can_idont_know',
     ]
     
     # ---------------- GET STUDENT -----------------
     def get(self, request,school_id,student_id):  
         try: 
-             # validate director actions 
+            # validate director actions 
             valid_student  = Student.objects.filter(id = student_id,school_id=school_id).first()  #.exists()
             if not valid_student:
                 return Response({"error": "Student not found"}, status=status.HTTP_200_OK)
@@ -135,7 +134,7 @@ class StudentDetailView(APIView):
                     "student": serializer.data
             }, status=status.HTTP_200_OK)
         except Exception as e :
-            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+            return Response({"error": "server error"}, status=status.HTTP_200_OK )
             
     def post(self, request):   ## add new student 
         try:

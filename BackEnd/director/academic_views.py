@@ -5,6 +5,7 @@ from django.utils import timezone
 # core app
 # views.py or any view file
 from core.emails.email_templates.emails import generate_school_update_email,generate_school_delete_email
+from core.formatters import format_serializer_errors
 from core.tasks import send_html_email,send_ordinary_sms
 
 from core.permissions import DirectorUserPermission
@@ -18,6 +19,15 @@ from rest_framework.parsers import MultiPartParser,FormParser
 from school.models import School ,SchoolDeleteRequest
 
 from student.models import Student, StudentClassEnrollment
+from section.serializers import SchoolSectionDetailSerializer
+from section.models import SchoolSection
+from classroom.serializers import ClassRoomDetailSerializer
+from subject.serializers import SubjectDetailSerializer
+from subject.models import Subject
+
+from core.custom_pegination import CustomPagination50
+from classroom.models import ClassRoom
+from school.models import School
 from classroom.models import ClassRoom ,PromotionLog
 from school.models import School,Session
 from school.serializers import SchoolSettingsSerializer
@@ -232,3 +242,184 @@ class DirectorClassPromotionView(APIView):
                     
         # except Exception as e :
             # return Response({"error": "server error"}, status=status.HTTP_200_OK)   
+            
+class DirectorAcademicView(APIView):
+    permission_classes = [DirectorUserPermission]
+    
+    def post(self, request,academic_item):   ## add new staff 
+        try:
+            pin = request.data.get( "pin" )
+            school_id = request.data.get( "school" )
+            
+            director = request.user.director
+            
+             #--------------- validate director actions -------------------
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
+            if not valid_school:
+                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+             #--------------- end  validate director actions -------------------
+            
+            #---------------------------SECTION CREATION -------------------
+            if academic_item == "sections":
+                # validate section 
+                name = request.data.get('name')
+                section_found = School.objects.filter(sections__name = name, id=school_id)
+                if section_found :
+                    return Response({"error": "Name Exist"}, status=status.HTTP_200_OK)
+                serializer = SchoolSectionDetailSerializer(data=request.data)
+                if serializer.is_valid() :
+                    serializer.save()
+                    return Response({
+                    "success": "Section created successfully",
+                    "new_section": serializer.data
+                }, status=status.HTTP_200_OK)
+                return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
+                    
+            #---------------------------CLASSROOM CREATION -------------------
+            if academic_item == "classrooms":
+                # validate section 
+                name = request.data.get('name')
+                classroom_found = School.objects.filter(sections__classrooms__name = name, id=school_id)
+                if classroom_found :
+                    return Response({"error": "Name already exist"}, status=status.HTTP_200_OK)
+                serializer = ClassRoomDetailSerializer(data=request.data)
+                
+                if serializer.is_valid() :
+                    serializer.save()
+                    return Response({
+                    "success": "Class Room created successfully",
+                    "new_classroom": serializer.data
+                }, status=status.HTTP_200_OK)
+                return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
+            
+            #---------------------------SUBJECTS CREATION -------------------
+            if academic_item == "subjects":
+                # validate section 
+                name = request.data.get('name')
+                code = request.data.get('code')
+                subject_found = School.objects.filter(
+                    Q(subjects__name__iexact=name) | Q(subjects__code__iexact=code),
+                    id=school_id
+                ).exists()
+
+                if subject_found:
+                    return Response(
+                        {"error": "Subject name or code already exists"},
+                        status=status.HTTP_200_OK
+                    )
+                serializer = SubjectDetailSerializer(data=request.data,context = {"request":request})
+                if serializer.is_valid() :
+                    serializer.save()
+                    return Response({
+                    "success": "Subject added successfully",
+                    "new_subject": serializer.data
+                }, status=status.HTTP_200_OK)
+                return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        
+    def put(self, request,academic_item,item_id):   ## update  
+        try:
+            pin = request.data.get( "pin" )
+            school_id = request.data.get( "school" )
+            director = request.user.director
+             #--------------- validate director actions -------------------
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
+            if not valid_school:
+                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+             #--------------- end  validate director actions -------------------
+            
+            #---------------------------SECTION UPDATE -------------------
+            if academic_item == "sections":
+                # validate section 
+                name = request.data.get('name')
+                name_exist = SchoolSection.objects.filter(
+                    school=school_id,
+                    name=name
+                ).exclude(
+                    id=item_id
+                )
+                if name_exist :
+                    return Response({"error": "Section name alraedy exist"}, status=status.HTTP_200_OK)
+                section = SchoolSection.objects.filter(id = item_id).first()
+                if not section :
+                    return Response({"error": "Section not exist"}, status=status.HTTP_200_OK)
+                    
+                serializer = SchoolSectionDetailSerializer(section, data=request.data,partial=True)
+                if serializer.is_valid() :
+                    serializer.save()
+                    return Response({
+                    "success": "Section update successfully",
+                    "updated_section": serializer.data
+                }, status=status.HTTP_200_OK)
+                return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
+                    
+            #---------------------------CLASSROOM UPDATE -------------------
+            if academic_item == "classrooms":
+                # validate section 
+                name = request.data.get('name')
+                name_exist = ClassRoom.objects.filter(
+                    name=name
+                ).exclude(
+                    id=item_id
+                )
+                if name_exist :
+                    return Response({"error": "Section name alraedy exist"}, status=status.HTTP_200_OK)
+                classroom = ClassRoom.objects.filter(id = item_id).first()
+                if not classroom :
+                    return Response({"error": "Class not exist"}, status=status.HTTP_200_OK)
+                
+                serializer = ClassRoomDetailSerializer(classroom,data=request.data,partial=True)
+                if serializer.is_valid() :
+                    serializer.save()
+                    return Response({
+                    "success": "Classroom updated successfully",
+                    "updated_classroom": serializer.data 
+                }, status=status.HTTP_200_OK)
+                return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
+            
+            #---------------------------SUBJECTS UPDATE-------------------
+            if academic_item == "subjects":
+                # validate section 
+                name = request.data.get('name')
+                code = request.data.get('code')
+                
+                
+                subject_exists = Subject.objects.filter(
+                        school_id=school_id
+                    ).filter(
+                        Q(name__iexact=name) | Q(code__iexact=code)
+                    ).exclude(
+                        id=item_id
+                    ).exists()
+
+                if subject_exists:
+                    return Response(
+                        {"error": "Subject name or code already exists"},
+                        status=status.HTTP_200_OK
+                    )
+                subject = Subject.objects.filter(id = item_id).first()
+                if not subject:
+                    return Response(
+                        {"error": "Subject not  exists"},
+                        status=status.HTTP_200_OK
+                    )
+                
+                serializer = SubjectDetailSerializer(subject,data=request.data,partial=True,context = {"request":request})
+                if serializer.is_valid() :
+                    serializer.save()
+                    return Response({
+                    "success": "Subject Updated successfully",
+                    "updated_subject": serializer.data
+                }, status=status.HTTP_200_OK)
+                return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+
+
+
+

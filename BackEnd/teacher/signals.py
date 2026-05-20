@@ -1,3 +1,5 @@
+from functools import cache
+
 from django.db.models.signals import pre_save, post_save ,post_delete
 from django.dispatch import receiver
 from authUser.models import User
@@ -34,10 +36,10 @@ def create_teacher_user(sender, instance, **kwargs):
         )
         user.set_password(password)
         # get perfect role 
-        role = SchoolRole.objects.filter(school_id=instance.school.id, name="Teacher").first()
-        if role :
-            user.school_role = role
-        user.save()
+        # role = SchoolRole.objects.filter(school_id=instance.school.id, name="Teacher").first()
+        # if role :
+        #     user.school_role = role
+        # user.save()
         instance.user = user
 
         # Send email with credentials
@@ -66,7 +68,6 @@ def update_user_when_student_updated(sender, instance, created, **kwargs):
         user = instance.user
         username = instance.staff_id
         
-        
         user.first_name=instance.first_name 
         user.username = username 
         user.last_name=instance.last_name 
@@ -76,3 +77,10 @@ def update_user_when_student_updated(sender, instance, created, **kwargs):
         user.role = instance.role
         user.gender = instance.gender 
         user.save()
+
+@receiver(post_save, sender=Teacher)
+@receiver(post_delete, sender=Teacher)
+def clear_teacher_cache(sender, instance, **kwargs):
+    cache.delete_pattern(
+        f"teachers_{instance.school.id}_*"
+    )

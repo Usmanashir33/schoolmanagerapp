@@ -1,16 +1,17 @@
 import json
 from os import name
-from turtle import update
 from rest_framework import serializers
 from django.db import transaction
 
 from school.models import FinanceSettings, School, SchoolBankAccount,Term,Session,Templates
+from school.models import ActivityLog, SchoolPermission, SchoolRole
 
 class TemplatesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Templates
         read_only_fields = ['id']
         fields = '__all__'  
+        
 from rest_framework import serializers
 from django.db import transaction
 
@@ -59,7 +60,19 @@ class SessionSerializer(serializers.ModelSerializer) :
         model = Session 
         fields ='__all__'
         read_only_fields = ['id', 'date_added'] 
-        
+class SchoolPermissionSerializer(serializers.ModelSerializer) :
+    class Meta:
+        model = SchoolPermission
+        fields = '__all__'
+        read_only_fields = ['id']
+class SchoolRoleSerializer(serializers.ModelSerializer) :
+    permissions = SchoolPermissionSerializer(many=True, read_only=True)
+    permissionIds = serializers.SerializerMethodField(read_only=True)
+    get_permissionIds = lambda self, obj: [perm.id for perm in obj.permissions.all()]
+    class Meta:
+        model = SchoolRole
+        fields = '__all__'
+        read_only_fields = ['id']
 class SchoolSettingsSerializer(serializers.ModelSerializer) :
     class Meta:  
         model = School 
@@ -132,7 +145,6 @@ class SchoolSettingsSerializer(serializers.ModelSerializer) :
 
         return instance
 
-from .models import ActivityLog
 class ActivityLogSerializer(serializers.ModelSerializer):
     userName = serializers.SerializerMethodField()
     class Meta:

@@ -10,7 +10,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
 from school.models import School 
-from staff.serializers import StaffSerializer,StaffDetailSerializer
+from staff.serializers import StaffDetailSerializer
 from staff.models import Staff
 from section.serializers import SchoolSectionDetailSerializer
 from section.models import SchoolSection
@@ -40,7 +40,7 @@ class DirectorAllStaffsView(APIView): #paginated request
             staffs = valid_school.staffs.all().order_by('joined_at') # all school students 
             paginator = CustomPagination50()
             staffs = paginator.paginate_queryset(staffs, request )
-            serializer_data = StaffSerializer(staffs, many=True).data
+            serializer_data = StaffDetailSerializer(staffs, many=True).data
             paginated_staffs = paginator.get_paginated_response(serializer_data)
             
             return Response({ 
@@ -56,7 +56,6 @@ class DirectorFilterStaffView(APIView):
     def get(self, request,searchQuery):  
         try:
             director = request.user.director
-             # validate director actions 
             searched  = Staff.objects.filter(
                 Q(id__icontains = searchQuery) | Q(first_name__icontains = searchQuery) |  Q(title__icontains = searchQuery) |
                 Q(last_name__icontains = searchQuery)  | Q(middle_name__icontains = searchQuery) | Q(email__icontains = searchQuery) |
@@ -83,7 +82,7 @@ class DirectorStaffView(APIView):
             valid_staff  = Staff.objects.filter(id = staff_id, school__director=director.id).first()  #.exists()
             if not valid_staff:
                 return Response({"error": "staff not found"}, status=status.HTTP_200_OK)
-            serializer = StaffSerializer(valid_staff)
+            serializer = StaffDetailSerializer(valid_staff)
             return Response({
                     "success": "staff details",
                     "staff": serializer.data
@@ -173,7 +172,7 @@ class DirectorStaffAdministrationView(APIView):
 
             if not staff:
                 return Response({"error": "Staff not found "}, status=status.HTTP_200_OK)
-            serializer = StaffSerializer(staff)
+            serializer = StaffDetailSerializer(staff)
             # ---------------- DELETE STAFF -----------------
             if request_action == "delete":
                 staff.delete()

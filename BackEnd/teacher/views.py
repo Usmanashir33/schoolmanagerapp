@@ -95,10 +95,15 @@ class FilterTeacherDetailView(APIView):
     def get(self, request,school_id,searchQuery):  
         try:
             searched  = Teacher.objects.filter(
-                Q(id__icontains = searchQuery)  | Q(first_name__icontains = searchQuery) |  Q(title__icontains = searchQuery) |
+                Q(first_name__icontains = searchQuery) |  Q(title__icontains = searchQuery) |
                 Q(last_name__icontains = searchQuery)  | Q(middle_name__icontains = searchQuery) | Q(email__icontains = searchQuery) |
                   Q(phone__icontains = searchQuery) | Q(staff_id__icontains = searchQuery)
-            ).filter(school_id = school_id)[:5]
+            ).filter(school_id = school_id).select_related(
+                    "user",
+                    "bank_details"
+                ).prefetch_related(
+                    "disciplinaryRecords",
+                )[:10]
             
             if not searched:
                 return Response({"success": "not found"}, status=status.HTTP_200_OK)

@@ -21,6 +21,7 @@ GENDER_CHOICES = (
     ('other', 'Other'), 
 )
 NSA_CHOICES = (
+    ('academic', 'Academic'),
     ('security', 'Security'),
     ('cleaner', 'Cleaner'),
     ('driver', 'Driver'),
@@ -72,8 +73,9 @@ class Staff(models.Model) :
         if not self.staff_id:
             self.staff_id = generate_unique_admission_number(self.school.tag, prefix='NAS')
         super().save(*args, **kwargs)
-        
 
     def __str__(self):
         return self.staff_id
     
+    def full_name(self):
+        return f"{self.first_name} {self.last_name} {self.middle_name}"

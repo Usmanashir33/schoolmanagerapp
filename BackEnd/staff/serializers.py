@@ -1,9 +1,13 @@
  
 from rest_framework import serializers
+from school.tasks import SchoolServices
 from staff.models import Staff , ActivityRole
 from core.serializers import BankSerializer 
 from authUser.serializers import MiniUserSerializer
 import json 
+
+from school.models import ActivityLog 
+from school.serializers import ActivityLogSerializer
 from django.db import transaction
 
 
@@ -11,11 +15,7 @@ class ActivityRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = ActivityRole
         fields = '__all__' 
-class StaffSerializer(serializers.ModelSerializer): 
-    user = MiniUserSerializer(read_only=True)
-    class Meta:
-        model = Staff
-        fields = '__all__' 
+
 class MiniStaffSerializer(serializers.ModelSerializer):  # for web sockets 
     user = MiniUserSerializer(read_only=True)
     class Meta:
@@ -24,6 +24,19 @@ class MiniStaffSerializer(serializers.ModelSerializer):  # for web sockets
         read_only_fields = ['id',]
         
 class StaffDetailSerializer(serializers.ModelSerializer):
+    picture        = serializers.SerializerMethodField()
+    user           = MiniUserSerializer(read_only=True)
+    bank_details   = BankSerializer(read_only=True)
+    activity_role  = ActivityRoleSerializer(read_only=True)
+    class Meta:
+        model = Staff
+        fields = '__all__'
+        
+    def get_picture(self, obj):
+        if obj.picture:
+            return obj.picture.url
+        return None
+class StaffCreateUpdateSerializer(serializers.ModelSerializer):
     picture        = serializers.SerializerMethodField()
     user           = MiniUserSerializer(read_only=True)
     bank_details   = BankSerializer(read_only=True)
@@ -45,7 +58,7 @@ class StaffDetailSerializer(serializers.ModelSerializer):
         
         # ✅ FIX: safe JSON parsing
         if bank_details_data:
-            try:
+            try: 
                 bank_data = json.loads(bank_details_data)
             except (TypeError, ValueError):
                 bank_details_data = None
@@ -122,5 +135,21 @@ class StaffDetailSerializer(serializers.ModelSerializer):
             if picture_file:
                 instance.picture = picture_file
             instance.save()
+            
+             # configuring activity log data 
+            new_log = ActivityLog.objects.create(
+                    school = instance.school,
+                    user=request.user,
+                    action="UPDATE",
+                    module="STAFF",
+                    description=f"Staff updated: {instance.staff_id} - {instance.full_name()}"
+                )
+            user_room = f"room{request.user.id}"
+            log_data = ActivityLogSerializer(new_log).data
+            data = {
+                "type": "send_response1",
+                "activity_log": log_data,
+                }
+            SchoolServices.send_activity_log.delay(destination=user_room, data=data)
                 
         return instance 

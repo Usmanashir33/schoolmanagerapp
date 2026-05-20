@@ -9,6 +9,10 @@ from director.models import Director
 from core.models import  generate_unique_admission_number
 from django.utils import timezone
 
+from django.db import models
+from django.conf import settings
+from shortuuid.django_fields import ShortUUIDField
+
 
 
 def upload_school_picture(instance,filename):
@@ -193,19 +197,11 @@ class SchoolRole(models.Model) :
     permissions = models.ManyToManyField(SchoolPermission, related_name="roles", blank=True)
     def __str__(self):
         return self.name
-
-# models.py
-
-from django.db import models
-from django.conf import settings
-from shortuuid.django_fields import ShortUUIDField
-
-
 class ActivityLog(models.Model):
 
     ACTION_CHOICES = [
         ("CREATE", "CREATE"),
-        ("UPDATE", "UPDATE"),
+        ("UPDATE", "UPDATE"), 
         ("DELETE", "DELETE"),
         ("SUSPEND", "SUSPEND"),
         ("LOGIN", "LOGIN"),

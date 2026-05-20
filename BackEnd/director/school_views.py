@@ -17,14 +17,14 @@ from classroom.models import *
 from classroom.serializers import PromotionLogSerializer
 from teacher.models import *
 from staff.models import *
-from staff.serializers import StaffSerializer
+from staff.serializers import StaffDetailSerializer
 from student.serializers import StudentSerializer
 from teacher.serializers import TeacherSerializer 
 from subject.serializers import SubjectSerializer
 from subject.models import *
 
 from school.models import *
-from school.serializers import ActivityLogSerializer, FinanceSettingsSerializer, TemplatesSerializer
+from school.serializers import ActivityLogSerializer, FinanceSettingsSerializer, SchoolPermissionSerializer, SchoolRoleSerializer, TemplatesSerializer
 
 
 #==================================================================================================            
@@ -45,6 +45,8 @@ class DirectorSchoolDetailView(APIView) :
             # limited to 100  recordes    per model to avoid overloading the response and client side
             school_data = School.objects.prefetch_related(
                     'finance',
+                    "permissions",
+                    "roles",
                     Prefetch(
                         "students",
                         queryset=Student.objects.order_by("joined_at")
@@ -83,7 +85,7 @@ class DirectorSchoolDetailView(APIView) :
                 "school_and_academics" : SchoolSerializer(school).data, 
                 "school_students" : StudentSerializer(school_data.students.all()[:60],many=True).data , 
                 "school_teachers" : TeacherSerializer(school_data.teachers.all()[:60],many=True).data ,
-                "school_staffs"   : StaffSerializer(school_data.staffs.all()[:60],many=True).data,
+                "school_staffs"   : StaffDetailSerializer(school_data.staffs.all()[:60],many=True).data,
                 "school_subjects" : SubjectSerializer(school_data.subjects,many=True).data,
                 "templates" : (TemplatesSerializer(school_data.templates,many=True).data
                                if hasattr(school_data,'templates') else [] ),
@@ -94,6 +96,8 @@ class DirectorSchoolDetailView(APIView) :
                 "finance" : (FinanceSettingsSerializer(school_data.finance).data
                             if hasattr(school_data,'finance') else []),
                 "class_fee_settings" : SchoolFeeSerializer(school_data.class_fee_settings,many=True).data,
+                "school_permissions" : SchoolPermissionSerializer(school_data.permissions,many=True).data,
+                "school_roles" : SchoolRoleSerializer(school_data.roles,many=True).data,
                 }, status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK)
