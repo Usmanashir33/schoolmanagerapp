@@ -147,6 +147,8 @@ class SchoolDeleteRequest(models.Model) :
     def __str__(self):
         return f"Delete Request for {self.school.name}"
 class FinanceSettings(models.Model):
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
+
     school = models.OneToOneField(School, on_delete=models.CASCADE, related_name="finance")
     paymentDueDate = models.IntegerField(default=15)  
     onlinePayment = models.BooleanField(default=True) 
@@ -154,6 +156,8 @@ class FinanceSettings(models.Model):
     def __str__(self):
         return f"Finance Settings for {self.school.name}"
 class SchoolBankAccount(models.Model):
+        id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
+
         finance = models.ForeignKey(FinanceSettings, on_delete=models.CASCADE, related_name="bank_accounts")
         currency = models.CharField(max_length=10, default="NGN")
         bank_name = models.CharField(max_length=100)
@@ -168,6 +172,8 @@ class SchoolBankAccount(models.Model):
             return f"{self.finance.school.name} - {self.bank_name} ({self.account_number})"
         
 class SchoolPermission(models.Model):
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
+
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="permissions")
     name = models.CharField(
         max_length=100,
@@ -180,6 +186,8 @@ class SchoolPermission(models.Model):
         return f"{self.school.name} - {self.name}"
     
 class SchoolRole(models.Model) :
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
+
     school = models.ForeignKey( 
         School,
         on_delete=models.CASCADE,

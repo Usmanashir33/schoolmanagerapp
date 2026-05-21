@@ -25,7 +25,6 @@ class SchoolPermissions:
     CAN_ADD_STAFFS = "can_add_staffs"
     CAN_MANAGE_STAFFS = "can_manage_staffs"
     STAFFS_MANAGEMENT = "staffs_management"
-    
 
     # School
     CAN_MANAGE_SCHOOL = "can_manage_school"

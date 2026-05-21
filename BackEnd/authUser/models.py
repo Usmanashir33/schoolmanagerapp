@@ -172,7 +172,7 @@ class UserPins(models.Model):
     # this handles payment pin 
     def setPin(self,row_pin):
         self.pins = row_pin
-        self.save()
+        self.save() 
         
     def checkPin(self,row_pin):
         # check if user set pin 

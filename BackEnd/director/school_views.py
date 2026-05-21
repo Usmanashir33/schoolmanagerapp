@@ -46,7 +46,10 @@ class DirectorSchoolDetailView(APIView) :
             school_data = School.objects.prefetch_related(
                     'finance',
                     "permissions",
-                    "roles",
+                    Prefetch(
+                        "roles",
+                        queryset=SchoolRole.objects.exclude(name__exact = "Director").order_by("name")
+                    ),
                     Prefetch(
                         "students",
                         queryset=Student.objects.order_by("joined_at")

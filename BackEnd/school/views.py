@@ -1,6 +1,6 @@
 # from logging import raiseExceptions
 from datetime import timedelta
-
+from django.utils import timezone 
 from django.db import transaction
 from django.db.models import Q
 
@@ -20,8 +20,10 @@ from rest_framework import permissions
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
-from .models import  FinanceSettings, School ,SchoolDeleteRequest, SchoolRole
-from .serializers import SchoolBankAccountSerializer, TemplatesSerializer
+
+from school.permissions import HasSchoolPermission,SchoolPermissions
+from .models import  FinanceSettings, School ,SchoolDeleteRequest, SchoolRole,SchoolPermission
+from .serializers import SchoolBankAccountSerializer, SchoolPermissionSerializer, SchoolPermissionSerializer, SchoolRoleSerializer, TemplatesSerializer
 from director.models import Director 
 from authUser.models import User,PendingEmail
 from authUser.serializers import MiniUserSerializer
@@ -243,6 +245,133 @@ class SchoolAndDirectorCreateView(APIView) :
         except :
            return Response({"error":"server error"},status=status.HTTP_200_OK)
        
+class SchoolRoleView(APIView) :
+    permission_classes=[HasSchoolPermission]
+    permissions_required = [
+        SchoolPermissions.CAN_MANAGE_SCHOOL
+    ]
+    def post(self, request) :
+        try:
+            pin = request.data.get('pin')
+            school_id = request.data.get("school")
+            role_name = request.data.get("name")
+            perm_ids = request.data.get("permissionIds")
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
+            school = School.objects.filter(id=school_id).prefetch_related("roles").first() 
+            if not school: 
+                return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
+            # validate no permission exist with this name 
+            existed_perm = school.roles.filter(name__exact = role_name).first()
+            if existed_perm :
+                return Response({"error": "Role with this name already exist"}, status=status.HTTP_200_OK)
+            # create new permission 
+            find_perms = school.permissions.filter(id__in = perm_ids)
+            if len(find_perms) != len(perm_ids) :
+                return Response({"error": "One or more invalid permission ids"}, status=status.HTTP_200_OK)
+            
+            new_role = SchoolRoleSerializer(data=request.data,context = {"request":request,'perms':find_perms})
+            if new_role.is_valid() :
+                new_role.save()
+                data = new_role.data 
+                return Response({"success":"New Role Created ","new_role":data}, status=status.HTTP_200_OK)
+            return Response({"error":"invalid details "},status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK) 
+        
+    def put(self, request,role_id) :
+        try:
+            pin = request.data.get('pin')
+            school_id = request.data.get("school")
+            role_name = request.data.get("name")
+            perm_ids = request.data.get("permissionIds")
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
+            school = School.objects.filter(id=school_id).prefetch_related("roles").first() 
+            if not school: 
+                return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
+            
+            # find the role  and prevent director edition 
+            role = school.roles.filter(id=role_id).first()
+            if not role or role.name.lower() == "director":
+                return Response({"error": "Role not found!"}, status=status.HTTP_200_OK)
+            
+            # validate no permission exist with this name 
+            existed_role = school.roles.filter(name__exact = role_name).exclude(id=role_id).first()
+            if existed_role :
+                return Response({"error": "Role with this name already exist"}, status=status.HTTP_200_OK)
+            
+            # check available permission 
+            find_perms = school.permissions.filter(id__in = perm_ids)
+            if len(find_perms) != len(perm_ids) :
+                return Response({"error": "One or more invalid permission ids"}, status=status.HTTP_200_OK)
+            
+            updated_role = SchoolRoleSerializer(role,data=request.data,context = {"request":request,'perms':find_perms})
+            if updated_role.is_valid() : 
+                updated_role.save()
+                data = updated_role.data 
+                return Response({"success":"Role Updated Succefully! ","updated_role":data}, status=status.HTTP_200_OK)
+            return Response({"error":"invalid details "},status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK) 
+class SchoolPermsionView(APIView) :
+    permission_classes=[HasSchoolPermission]
+    permissions_required = [
+        SchoolPermissions.CAN_MANAGE_SCHOOL
+    ]
+    def post(self, request) :
+        try:
+            pin = request.data.get('pin')
+            school_id = request.data.get("school")
+            perm_name = request.data.get("name")
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
+            school = School.objects.filter(id=school_id).prefetch_related("permissions").first() 
+            if not school: 
+                return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
+            # validate no permission exist with this name 
+            existed_perm = school.permissions.filter(name__exact = perm_name).first()
+            if existed_perm :
+                return Response({"error": "Permission with this name already exist"}, status=status.HTTP_200_OK)
+            # create new permission 
+            new_perm = SchoolPermissionSerializer(data=request.data)
+            if new_perm.is_valid():
+                new_perm.save()
+                data = new_perm.data
+                return Response({"success":"New Permission Created ","new_perm":data}, status=status.HTTP_200_OK)
+            return Response({"error":"invalid details "},status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK) 
+    def put(self, request,perm_id) :
+        try:
+            pin = request.data.get('pin')
+            school_id = request.data.get("school")
+            perm_name = request.data.get("name")
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
+            school = School.objects.filter(id=school_id).prefetch_related("permissions").first() 
+            if not school: 
+                return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
+            
+            perm = school.permissions.filter(id=perm_id).first()
+            if not perm :
+                return Response({"error": "Permission not found"}, status=status.HTTP_200_OK)
+            
+            # validate no permission exist with this name 
+            existed_perm = school.permissions.filter(name__exact = perm_name).exclude(id=perm_id).first()
+            if existed_perm :
+                return Response({"error": "Permission with this name already exist"}, status=status.HTTP_200_OK)
+            # create new permission 
+            new_perm = SchoolPermissionSerializer(perm, data=request.data)
+            if new_perm.is_valid() :
+                new_perm.save()
+                data = new_perm.data
+                return Response({"success":"Permission Updated ","updated_perm":data}, status=status.HTTP_200_OK)
+            return Response({"error":"invalid details "},status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK) 
 class SchoolTemplateView(APIView) :
     parser_classes =[MultiPartParser,FormParser]
     permission_classes=[
@@ -251,7 +380,7 @@ class SchoolTemplateView(APIView) :
     ]
     
     def post(self, request, school_id) :
-        # try:
+        try:
             director = request.user.director
             # validate director actions 
             pin = request.data.get('pin')
@@ -268,11 +397,11 @@ class SchoolTemplateView(APIView) :
                 serializer.save()
                 return Response({"success":"New Template Created&Activated ","new_temp":serializer.data}, status=status.HTTP_200_OK)
             return Response({"error":format_serializer_errors(serializer.errors)},status=status.HTTP_200_OK) 
-        # except:
-            # return Response({"error":"server error"},status=status.HTTP_200_OK) 
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK) 
     
     def put(self, request, school_id,template_id) :
-        # try:
+        try:
             director = request.user.director
             # validate director actions 
             pin = request.data.get('pin')
@@ -302,8 +431,8 @@ class SchoolTemplateView(APIView) :
                         s.isActive = False
                         s.save()
                 return Response({"success": "Template Updated","updated_temp":serializer.data}, status=status.HTTP_200_OK)
-        # except:
-            # return Response({"error":"server error"},status=status.HTTP_200_OK) 
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK) 
     
     def delete(self, request, school_id,template_id,pin) :
         try:

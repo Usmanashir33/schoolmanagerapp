@@ -54,7 +54,7 @@ class Teacher(models.Model) :
     id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
     user = models.OneToOneField(User, on_delete=models.SET_NULL,blank=True,related_name='teacher', null=True)
     
-    first_name = models.CharField(max_length=100,)
+    first_name = models.CharField(max_length=100,) 
     last_name = models.CharField(max_length=100,)
     middle_name = models.CharField(max_length=100, blank=True)
     email = models.EmailField(unique=True,null=True, blank=True)

@@ -63,16 +63,82 @@ class SessionSerializer(serializers.ModelSerializer) :
 class SchoolPermissionSerializer(serializers.ModelSerializer) :
     class Meta:
         model = SchoolPermission
-        fields = '__all__'
+        fields = ['id','school','name','description']
         read_only_fields = ['id']
+        
+    def create(self, validated_data) :
+        created = super().create(validated_data)
+        return created
+    
+    def update(self, instance, validated_data) :
+        for attr, value in validated_data.items() :
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+    
 class SchoolRoleSerializer(serializers.ModelSerializer) :
     permissions = SchoolPermissionSerializer(many=True, read_only=True)
     permissionIds = serializers.SerializerMethodField(read_only=True)
+    users = serializers.SerializerMethodField(read_only=True)
     get_permissionIds = lambda self, obj: [perm.id for perm in obj.permissions.all()]
+    def get_users(self, obj):
+
+        users_data = []
+        if not  hasattr(obj, "users") :
+            return users_data
+        
+        users = obj.users.all()
+        for user in users:
+
+            user_data = {
+                "id": user.id,
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": user.role,
+                "picture": user.picture.url if user.picture else None,
+                "email": user.email,
+            }
+
+            # if hasattr(user, "director"):
+            #     user_data["director_id"] = user.director.id
+            #     user_data["type"] = "director"
+
+            # elif hasattr(user, "teacher"):
+            #     user_data["teacher_id"] = user.teacher.id
+            #     user_data["type"] = "teacher"
+
+            # elif hasattr(user, "staff"):
+            #     user_data["staff_id"] = user.staff.id
+            #     user_data["type"] = "staff"
+
+            users_data.append(user_data)
+
+        return users_data
+        
     class Meta:
         model = SchoolRole
         fields = '__all__'
         read_only_fields = ['id']
+        
+    def create(self, validated_data):
+        perms = self.context['perms']
+        created= super().create(validated_data)
+        
+        if created and perms :
+            created.permissions.set(perms)
+        return created 
+    
+    def update(self, instance, validated_data):
+        perms = self.context['perms']
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        if perms :
+            instance.permissions.set(perms)
+        return instance
 class SchoolSettingsSerializer(serializers.ModelSerializer) :
     class Meta:  
         model = School 
