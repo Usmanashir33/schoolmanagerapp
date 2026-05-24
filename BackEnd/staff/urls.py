@@ -13,5 +13,6 @@ urlpatterns = [
     path('all-staffs/<uuid:school_id>/', AllStaffsView.as_view(), name='all-staff'), 
     path('search/staff/<str:searchQuery>/',FilterStaffView.as_view(),  name='search-staff'),#Tested
     path('manage-staff/<str:staff_id>/<str:request_action>/', StaffAdministrationView.as_view(), name='manage-staff'),#tasted
+    path('manage-staff-role/<str:staff_id>/', StaffRoleManagementView.as_view(), name='manage-staff'),#tasted
     
 ]

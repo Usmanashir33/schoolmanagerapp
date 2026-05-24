@@ -4,16 +4,14 @@ from django.db import models
 import shortuuid
 from teacher.models import Teacher
 from authUser.models import User
-from classroom.models import ClassRoom
+from academics.models import ClassRoom,Subject
 import os , uuid
 from django.utils.translation import gettext_lazy as _  
 from datetime import datetime
 from director.models import Director
 from school.models import School , Session , Term
-from subject.models import Subject
 from parent.models import Parents
 from core.models import  generate_unique_admission_number
-from classroom.models import ClassRoom
 
 def upload_student_pic(instance,filename):
     ext = os.path.splitext(filename)[1]

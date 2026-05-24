@@ -11,8 +11,7 @@ from django.db import transaction
 from director.models import Director
 from django.db import models
 from school.models import School
-from section.models import SchoolSection 
-from classroom.models import ClassRoom
+from academics.models import SchoolSection ,ClassRoom,Subject
 from core.models import  generate_unique_admission_number , BankDetails
 
 
@@ -54,8 +53,8 @@ class Teacher(models.Model) :
     id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
     user = models.OneToOneField(User, on_delete=models.SET_NULL,blank=True,related_name='teacher', null=True)
     
-    first_name = models.CharField(max_length=100,) 
-    last_name = models.CharField(max_length=100,)
+    first_name = models.CharField(max_length=100, )  
+    last_name = models.CharField(max_length=100,  ) 
     middle_name = models.CharField(max_length=100, blank=True)
     email = models.EmailField(unique=True,null=True, blank=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES , blank=True,default='male')
@@ -65,6 +64,7 @@ class Teacher(models.Model) :
     phone = models.CharField(max_length=20, blank=True,unique=True,null=True)
     
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="teachers")
+    subjects = models.ManyToManyField(Subject,related_name="teachers", blank=True,symmetrical=False,)
     class_room = models.ManyToManyField(ClassRoom,  related_name="teachers", blank=True,symmetrical=False,)
     form_class = models.ForeignKey(ClassRoom, on_delete=models.SET_NULL, null=True, related_name="form_teacher", blank=True)
     

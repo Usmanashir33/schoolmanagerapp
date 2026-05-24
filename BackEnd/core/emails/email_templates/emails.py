@@ -21,6 +21,76 @@ def generate_registration_email(email:str ,name: str, ) -> str:
         </p>
     """
     return base_email_template(content, title="Welcome to eduportal services !")
+def generate_staff_role_assignment_email(
+    name: str,
+    role_name: str,
+    school_name: str,
+    assigned_by: str,
+) -> str:
+
+    content = f"""
+        <div style="padding:10px 0;">
+            
+            <p style="font-size:16px;">
+                Hello <strong>{name}</strong>,
+            </p>
+
+            <p style="font-size:15px; line-height:1.7;">
+                🎉 We are pleased to inform you that you have been assigned a new role on 
+                <strong>{school_name}</strong>.
+            </p>
+
+            <div style="
+                background:#f4f7ff;
+                border-left:5px solid #4f46e5;
+                padding:18px;
+                border-radius:8px;
+                margin:25px 0;
+            ">
+                <p style="margin:0; font-size:15px;">
+                    <strong>Assigned Role:</strong> {role_name}
+                </p>
+
+                <p style="margin-top:10px; font-size:15px;">
+                    <strong>Assigned By:</strong> {assigned_by}
+                </p>
+            </div>
+
+            <p style="font-size:15px; line-height:1.7;">
+                Your access permissions and responsibilities within the platform have now been updated based on this role.
+            </p>
+
+            <p style="font-size:15px; line-height:1.7;">
+                Kindly log in to your dashboard to view and manage your newly assigned privileges.
+            </p>
+
+            <div style="text-align:center; margin:35px 0;">
+                <a href="#"
+                    style="
+                        background:#4f46e5;
+                        color:white;
+                        padding:14px 28px;
+                        text-decoration:none;
+                        border-radius:8px;
+                        font-weight:bold;
+                        display:inline-block;
+                    "
+                >
+                    Access Dashboard
+                </a>
+            </div>
+
+            <p style="font-size:14px; color:#666;">
+                If you believe this assignment was made in error, please contact your school administrator.
+            </p>
+
+        </div>
+    """
+
+    return base_email_template(
+        content,
+        title="New Role Assignment Notification"
+    )
 
 def generate_login_email(user_name: str, dashboard_url: str) -> str:
     content = f"""

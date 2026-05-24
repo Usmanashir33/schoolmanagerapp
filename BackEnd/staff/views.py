@@ -7,6 +7,7 @@ from django.db.models import Q
 # views.py or any view file
 from authUser.models import User
 from attendanceanddevices.models import User
+from core.emails.email_templates.emails import generate_staff_role_assignment_email
 from core.formatters import format_serializer_errors
 from core.permissions import DirectorUserPermission
 
@@ -14,6 +15,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
+from core.tasks import send_html_email
 from school.models import School 
 from school.permissions import HasSchoolPermission, SchoolPermissions
 from school.tasks import SchoolServices
@@ -21,7 +23,7 @@ from staff.serializers import StaffDetailSerializer,StaffCreateUpdateSerializer
 from staff.models import Staff
 
 from core.custom_pegination import CustomPagination50
-from classroom.models import ClassRoom
+from academics.models import ClassRoom
 from school.models import School
 
 from school.models import ActivityLog, School
@@ -247,7 +249,10 @@ class StaffAdministrationView(APIView):
                     "type": "send_response1",
                     "activity_log": log_data,
                     }
-                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                try:
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                except :
+                    pass
                 return Response({
                     "success": f"Staff {request_action} successfully",
                     "del_staff": {'id': staff_id, "full_name": staff.full_name()}
@@ -258,6 +263,65 @@ class StaffAdministrationView(APIView):
                 user.is_active = not user.is_active
                 user.save()
                 request_action = "Activated" if user.is_active else "Suspended" 
+                
+                # configuring activity log data 
+                new_log = ActivityLog.objects.create(
+                    school = valid_school,
+                    user=request.user,
+                    action="UPDATE",
+                    module="STAFF",
+                    description=f"Staff {request_action}:{staff.staff_id} - {staff.full_name()}"
+                )
+                user_room = f"room{request.user.id}"
+                log_data = ActivityLogSerializer(new_log).data
+                data = {
+                    "type": "send_response1",
+                    "activity_log": log_data,
+                    }
+                try:
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                except :
+                    pass
+                return Response({
+                    "success": f"Staff {request_action} successfully",
+                    "sus_staff": serializer.data
+                }, status=status.HTTP_200_OK)
+        except:
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+class StaffRoleManagementView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_SCHOOL]
+    def put(self, request,staff_id,):
+        try:
+            pin = request.data.get("pin")
+            school_id = request.data.get("school")
+            role_id =request.data.get("roleIds")
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+             # validate director actions 
+             
+            valid_school = School.objects.filter(id=school_id).prefetch_related("roles").first()  #.exists()
+            if not valid_school:
+                return Response({"error": "Invalid  Entry"}, status=status.HTTP_200_OK)
+            
+            valid_role = valid_school.roles.filter(id__in=role_id).first()
+            if not valid_role:
+                return Response({"error": "Invalid  Role"}, status=status.HTTP_200_OK)
+            
+            staff = Staff.objects.filter(
+                id=staff_id,
+                school_id=school_id
+            ).first()
+            if not staff:
+                return Response({"error": "Staff not found "}, status=status.HTTP_200_OK)
+            serializer = StaffDetailSerializer(staff)
+            
+            if valid_role :
+                user = staff.user
+                user.school_role = valid_role
+                user.save()
+                request_action = f"{valid_role.name} Role Assigened" 
                 
                  # configuring activity log data 
                 new_log = ActivityLog.objects.create(
@@ -273,10 +337,24 @@ class StaffAdministrationView(APIView):
                     "type": "send_response1",
                     "activity_log": log_data,
                     }
-                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                try :
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                    name = staff.full_name()
+                    role_name = valid_role.name 
+                    assigned_by = f"{request.user.role} {request.user.full_name()}"
+                    
+                    html_content = generate_staff_role_assignment_email(name,role_name,valid_school.name,assigned_by)
+                    send_html_email.delay(
+                        subject="School Role Promotion!",
+                        to_email=staff.email,
+                        html_content=html_content
+                    )
+                except :
+                    pass
+                
                 return Response({
                     "success": f"Staff {request_action} successfully",
-                    "sus_staff": serializer.data
+                    "updated_staff": serializer.data
                 }, status=status.HTTP_200_OK)
         except:
             return Response({"error": "server error"}, status=status.HTTP_200_OK)

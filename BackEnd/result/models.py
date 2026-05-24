@@ -1,9 +1,6 @@
 from django.db import models
-from classroom.models import ClassRoom
+from academics.models import *
 from student.models import Student
-from subject.models import Subject
-from subject.models import Subject
-from classroom.models import ClassRoom
 from teacher.models import Teacher
 from teacher.models import Teacher
 from school.models import School , Session , Term

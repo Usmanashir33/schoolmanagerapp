@@ -2,14 +2,12 @@ from rest_framework import serializers
 
 from school.models import School,SchoolDeleteRequest
 from school.serializers import TermSerializer, SessionSerializer
-from section.models import SchoolSection
+from academics.models import SchoolSection,Subject,ClassRoom
 from student.models import Student
 from teacher.models import Teacher
-from classroom.models import ClassRoom
 from director.models import Director
 from parent.models import Parents 
 from staff.models import Staff
-from subject .models import Subject
 from core .models import BankDetails 
 from authUser.serializers import MiniUserSerializer
 

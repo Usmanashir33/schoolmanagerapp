@@ -1,10 +1,9 @@
 from rest_framework import serializers
 
 from school.models import School
-from section.models import SchoolSection
+from academics.models import SchoolSection,ClassRoom
 from student.models import Student
 from teacher.models import Teacher
-from classroom.models import ClassRoom
 from director.models import Director
 from parent.models import Parents 
 from staff.models import Staff

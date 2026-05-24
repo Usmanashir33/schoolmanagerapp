@@ -13,15 +13,13 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
 from school.models import *
-from classroom.models import *
-from classroom.serializers import PromotionLogSerializer
+from academics.models import *
+from academics.serializers import PromotionLogSerializer,SubjectSerializer
 from teacher.models import *
 from staff.models import *
 from staff.serializers import StaffDetailSerializer
 from student.serializers import StudentSerializer
 from teacher.serializers import TeacherSerializer 
-from subject.serializers import SubjectSerializer
-from subject.models import *
 
 from school.models import *
 from school.serializers import ActivityLogSerializer, FinanceSettingsSerializer, SchoolPermissionSerializer, SchoolRoleSerializer, TemplatesSerializer

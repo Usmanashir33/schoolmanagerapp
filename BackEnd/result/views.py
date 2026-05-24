@@ -8,7 +8,7 @@ from rest_framework.parsers import MultiPartParser,FormParser
 from rest_framework.exceptions import ValidationError
 
 
-from subject.models import Subject
+from academics.models import Subject,ClassRoom
 
 from .utils import build_student_records_workbook , decript_scores_from_workbook,generate_report_and_position
 from .utils import build_student_character_workbook,decript_skills_from_workbook
@@ -17,7 +17,6 @@ from core.formatters import format_serializer_errors
 from core.permissions import DirectorUserPermission
 from school.models import School
 from student.models import Student
-from classroom.models import ClassRoom
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response

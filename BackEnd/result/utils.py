@@ -2,7 +2,7 @@ from django.db.models import Sum, Avg
 from .models import  ReportSheet, StudentResult ,ResultBatch ,CharacterBatch
 from student.models import Student
 from school.models import School , Session , Term
-from classroom.models import ClassRoom
+from academics.models import ClassRoom
             
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Border, Side

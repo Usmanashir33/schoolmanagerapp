@@ -265,7 +265,10 @@ class StudentAdministrationView(APIView):
                     "type": "send_response1",
                     "activity_log": log_data,
                     }
-                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                try:
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                except :
+                    pass
                 return Response({
                     "success": f"Student {request_action} successfully",
                     "del_student": serializer.data
@@ -292,8 +295,11 @@ class StudentAdministrationView(APIView):
                     "type": "send_response1",
                     "activity_log": log_data,
                     }
-                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
-                
+                try:
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                except :
+                    pass
+
                 return Response({
                     "success": f"Student {request_action} successfully",
                     "sus_student": serializer.data

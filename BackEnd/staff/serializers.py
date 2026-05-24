@@ -150,6 +150,8 @@ class StaffCreateUpdateSerializer(serializers.ModelSerializer):
                 "type": "send_response1",
                 "activity_log": log_data,
                 }
-            SchoolServices.send_activity_log.delay(destination=user_room, data=data)
-                
+            try:
+                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+            except :
+                pass
         return instance 

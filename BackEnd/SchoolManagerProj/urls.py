@@ -43,6 +43,7 @@ urlpatterns = [
     # path('api-auth/', include('rest_framework.urls', namespace='rest_framework'))
     path('admin/', admin.site.urls),
     path('authuser/',include("authUser.urls")),
+    path('academics/',include("academics.urls")),
     path('school/',include("school.urls")),
     path('student/',include("student.urls")),
     path('teacher/',include("teacher.urls")),

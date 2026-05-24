@@ -22,7 +22,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
 from school.models import School, Session, Term
 from .models import ClassFeeSetting, PaymentInitiation ,StudentTransaction
-from classroom.models import ClassRoom
+from academics.models import ClassRoom
 from student .models import StudentClassEnrollment ,Student
 from .utils import process_payment
 from .tasks import generate_student_term_fees_task 

@@ -11,7 +11,7 @@ from school.models import ActivityLog
 from school.serializers import ActivityLogSerializer
 import student
 from .models import Student , StudentClassEnrollment
-from classroom.models import ClassRoom
+from academics.models import ClassRoom
 from core.serializers import  ClassRoomSerializer
 from core.websocketutils import signal_sender
 from parent.models import Parents
@@ -244,6 +244,9 @@ class StudentCreateSerializer(serializers.ModelSerializer):
                 "type": "send_response1",
                 "activity_log": log_data,
                 }
-            SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+            try:
+                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+            except :
+                    pass
             
         return instance

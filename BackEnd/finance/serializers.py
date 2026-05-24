@@ -1,13 +1,13 @@
 
 from rest_framework import serializers
-from classroom.serializers import ClassRoomDetailSerializer
+from academics.serializers import ClassRoomDetailSerializer
 from staff.models import Staff , ActivityRole
 from core.serializers import BankSerializer 
 from authUser.serializers import MiniUserSerializer
 import json 
 from django.db import transaction
 from .models import ClassFeeSetting, PaymentInitiation,StudentTransaction
-from classroom.models import ClassRoom
+from academics.models import ClassRoom
 from student .models import StudentClassEnrollment ,Student
 from student.serializers import MiniStudentSerializer
 

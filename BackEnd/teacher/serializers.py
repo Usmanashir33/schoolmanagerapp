@@ -4,8 +4,7 @@ from authUser.serializers import MiniUserSerializer
 from django.db import transaction
 from .models import Teacher
 from core.models import BankDetails
-from classroom.models import ClassRoom
-from section.models import SchoolSection
+from academics.models import ClassRoom,SchoolSection
 from core.serializers import ClassRoomSerializer,BankSerializer
 import json
 from .models import DisplinaryRecord
@@ -154,6 +153,9 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
                     "type": "send_response1",
                     "activity_log": log_data,
                     }
-            SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+            try:
+                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+            except :
+                pass
                 
         return instance 

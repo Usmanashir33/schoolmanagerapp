@@ -1,16 +1,15 @@
 from rest_framework import serializers
 
-from  classroom.models import ClassRoom
+from  academics.models import ClassRoom,Subject
 from   school.models import School, Session, Term
 from  student.models import Student, Student, StudentClassEnrollment
-from  subject.models import Subject
 from  .models import ResultBatch, StudentResult,ReportSheet,StudentCharacterSkill,CharacterBatch,ApprovalRecord
 from teacher.models import Teacher
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
-from classroom.serializers import ClassRoomDetailSerializer
+from academics.serializers import ClassRoomDetailSerializer
 from student.serializers import StudentSerializer
 from school.serializers import SessionSerializer,TermSerializer
 

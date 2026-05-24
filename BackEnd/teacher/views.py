@@ -342,7 +342,10 @@ class TeacherAdministrationView(APIView):
                     "type": "send_response1",
                     "activity_log": log_data,
                     }
-                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                try:
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                except :
+                    pass
                 return Response({
                     "success": f"Teacher {request_action} successfully",
                     "del_teacher": {'id':teacher_id}
@@ -370,8 +373,11 @@ class TeacherAdministrationView(APIView):
                     "type": "send_response1",
                     "activity_log": log_data,
                     }
-                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
-                
+                try:
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                except :
+                    pass
+
                 return Response({
                     "success": f"Teacher {request_action} successfully",
                     "sus_teacher": serializer.data

@@ -100,7 +100,6 @@ class RegisterVerifyView(APIView) :
                     )
                 except :
                     pass
-                
                 tokens = create_jwt_tokens_for_user(user)
                 data = serialize_with_role(user,user.role)
                 if not data :

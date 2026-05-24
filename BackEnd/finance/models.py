@@ -1,9 +1,8 @@
 import uuid
 from django.db import models
-from classroom.models import ClassRoom
+from academics.models import ClassRoom
 from school.models import School, Session, Term,School
 from parent.models import Parents
-from classroom.models import ClassRoom
 from student.models import Student
 
 
