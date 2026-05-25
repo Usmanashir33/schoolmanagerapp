@@ -9,14 +9,14 @@ from werkzeug import Response
 from school.models import ActivityLog
 from school.models import ActivityLog
 from school.serializers import ActivityLogSerializer
+from teacher.serializers import MiniTeacherSerializer
 import student
 from .models import Student , StudentClassEnrollment
 from academics.models import ClassRoom
-from core.serializers import  ClassRoomSerializer
 from core.websocketutils import signal_sender
 from parent.models import Parents
 from parent.serializers import ParentsSerializer
-from authUser.serializers import MiniUserSerializer
+from authUser.serializers import MiniUserSerializer 
 from authUser.models import User
 import json
 from rest_framework import serializers
@@ -24,7 +24,21 @@ from school.tasks import SchoolServices
 
 import json
 from django.db import transaction
-
+#                          to prevent circulat import issues
+class MiniClassRoomSerializer(serializers.ModelSerializer) :
+    form_teacher = MiniTeacherSerializer(read_only =True)
+    studentsCount = serializers.SerializerMethodField(read_only = True)
+    teachersCount = serializers.SerializerMethodField(read_only = True)
+    
+    def get_studentsCount(self,obj):
+        return obj.student_enrollments.filter(status__in=["active",'enrolled']).count()
+    
+    def get_teachersCount(self,obj):
+        return obj.subjects.count()
+    class Meta:  
+        model = ClassRoom
+        fields ='__all__'
+        read_only_fields = ['id', 'joined_at']
 class StudentClassEnrollmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentClassEnrollment  
@@ -51,7 +65,7 @@ class StudentSerializer(serializers.ModelSerializer):
         )
 
 class StudentDetailFetchSerializer(serializers.ModelSerializer):
-    class_room = ClassRoomSerializer(many=True)
+    class_room = MiniClassRoomSerializer(many=True)
     user = MiniUserSerializer(read_only=True)
     class Meta:
         model = Student
@@ -59,17 +73,15 @@ class StudentDetailFetchSerializer(serializers.ModelSerializer):
         extra_kwargs = {
         "class_room": {"required": False,}
     }
-class MiniStudentSerializer(serializers.ModelSerializer): # for websocket 
-    user = MiniUserSerializer(read_only=True)
-    active_class_rooms = serializers.SerializerMethodField()
-    def get_active_class_rooms(self, obj) : 
-        # get enrollments for the student with only active or enrolled status and eturn the class ids 
-        enrollments = StudentClassEnrollment.objects.filter(student=obj, status__in = ['active', 'enrolled'])
-        return [enrollment.class_room.id for enrollment in enrollments]
+class MiniStudentSerializer(serializers.ModelSerializer):
+    picture = serializers.SerializerMethodField(read_only=True)
+    
+    def get_picture(self, obj):
+        return obj.picture.url if obj.picture else None
     class Meta:
         model = Student
         fields = '__all__'
-        read_only_fields = ['id',]
+        read_only_fields = ['id',"admission_number",'first_name',"last_name",'middle_name','email','picture']
 class StudentDetailSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)
     picture = serializers.SerializerMethodField()

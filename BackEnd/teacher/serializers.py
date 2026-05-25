@@ -5,13 +5,17 @@ from django.db import transaction
 from .models import Teacher
 from core.models import BankDetails
 from academics.models import ClassRoom,SchoolSection
-from core.serializers import ClassRoomSerializer,BankSerializer
+# from core.serializers import BankSerializer 
 import json
 from .models import DisplinaryRecord
 from school.models import ActivityLog
 from school.serializers import ActivityLogSerializer
 from school.tasks import SchoolServices
-
+class BankSerializer(serializers.ModelSerializer) : 
+    class Meta:  
+        model = BankDetails 
+        fields ='__all__'
+        read_only_fields = ['id', 'created_at']
 class DisplinaryRecordSerializer(serializers.ModelSerializer ) :
     class Meta:
         model = DisplinaryRecord
@@ -32,12 +36,16 @@ class TeacherSerializer(serializers.ModelSerializer):
         model = Teacher 
         fields ='__all__'
         read_only_fields = ['id', 'joined_at']
-class MiniTeacherSerializer(serializers.ModelSerializer):  # for websocket 
-    user = MiniUserSerializer(read_only=True)
-    class Meta:  
-        model = Teacher 
-        fields ='__all__'
-        read_only_fields = ['id',]
+class MiniTeacherSerializer(serializers.ModelSerializer):
+    picture = serializers.SerializerMethodField(read_only=True)
+    
+    def get_picture(self, obj):
+        return obj.picture.url if obj.picture else None
+    class Meta:
+        model = Teacher
+        fields = '__all__'
+        read_only_fields = ['id',"staff_id",'first_name',"last_name",'middle_name','email','picture']
+
  
 
 class TeacherDetailSerializer(serializers.ModelSerializer):
@@ -64,7 +72,7 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Teacher
         fields = "__all__"
-        read_only_fields = ["id", "staff_id", "joined_at", "user","class_room"]
+        read_only_fields = ["id", "staff_id", "joined_at", "user",]
 
     
     def get_picture(self, obj):
@@ -76,7 +84,6 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context["request"]
         bank_details_data = request.data.get("bank_details", [])
-        class_rooms = request.data.getlist("class_rooms", [])
         picture_file = request.FILES.get("picture")
         
         # ✅ FIX: safe JSON parsing
@@ -92,10 +99,6 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             if bank.is_valid() :
                 bank.save()
                 teacher.bank_details = bank.instance
-
-            if class_rooms:
-                teacher.class_room.set(ClassRoom.objects.filter(id__in = class_rooms))
-                
             if picture_file:
                 teacher.picture = picture_file
             
@@ -106,7 +109,6 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         request = self.context["request"]
         bank_details_data = request.data.get("bank_details", [])
-        class_room_ids = request.data.getlist("class_rooms", [])
         picture_file = request.FILES.get("picture")
         
          # ✅ FIX: safe JSON parsing
@@ -130,10 +132,6 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             if bank.is_valid() :
                 bank.save()
                 instance.bank_details = bank.instance
-            if class_room_ids:
-                instance.class_room.set(
-                    ClassRoom.objects.filter(id__in=class_room_ids)
-                )
                 
             if picture_file:
                 instance.picture = picture_file

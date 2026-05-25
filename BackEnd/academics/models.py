@@ -4,6 +4,7 @@ from django.db import models
 import shortuuid
 from school.models import School,Session
 from authUser.models import User
+from teacher.models import Teacher
 import os , uuid
 from django.utils.translation import gettext_lazy as _   
 from core.models import  generate_unique_admission_number
@@ -37,10 +38,12 @@ GENDER_CHOICES = (
 )
 
 # Create your models here.
-class ClassRoom(models.Model): 
+class ClassRoom(models.Model) : 
     id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
     name = models.CharField(max_length=100,db_index=True)  # Example: "SS1 A"
-    section = models.ForeignKey(SchoolSection, on_delete=models.CASCADE, related_name="classrooms", null=True,)
+    section = models.ForeignKey(SchoolSection, on_delete = models.SET_NULL, related_name="classrooms", null=True,)
+    form_teacher = models.ForeignKey(Teacher, on_delete = models.SET_NULL, null=True, related_name="form_classes", blank=True)
+    
     joined_at = models.DateTimeField(auto_now_add=True)
      
     def __str__(self):
@@ -174,8 +177,7 @@ class Subject(models.Model) :
     name = models.CharField(max_length=100,db_index=True)
     code= models.CharField(max_length=20,null=True,db_index=True)   
     credits =models.IntegerField(blank=True,null=True)
-    
-    class_rooms = models.ManyToManyField(ClassRoom, related_name="subjects",blank=True,symmetrical=False,)
+    teachers = models.ManyToManyField(Teacher,related_name="subjects", blank=True,symmetrical=False,)
     added_at = models.DateTimeField(auto_now_add=True)
     class Meta :
         db_table = 'subject_subject'
@@ -186,3 +188,36 @@ class Subject(models.Model) :
      
     def __str__(self):
         return self.school + " " + self.name + " " + self.code 
+    
+class TeachingAssignment(models.Model):
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+
+    teacher = models.ForeignKey(
+        Teacher,
+        on_delete=models.CASCADE,
+        related_name="teaching_assignments"
+    )
+
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.CASCADE,
+        related_name="teaching_assignments"
+    )
+
+    classroom = models.ForeignKey(
+        ClassRoom,
+        on_delete=models.CASCADE,
+        related_name="teaching_assignments"
+    )
+
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (
+            "teacher",
+            "subject",
+            "classroom",
+        )
+    def __str__(self):
+        return f"{self.school.name} {self.teacher.full_name()} "
+    

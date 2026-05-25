@@ -36,14 +36,14 @@ class DirectorSchoolDetailView(APIView) :
         DirectorUserPermission,
     ]
     def get(self, request,school_id): # get school data 
-        try:
-            school = School.objects.select_related("director").filter(id=school_id,director__user__id = request.user.id).first()
-            if not school :
-                return Response({"error":"school not found "},status=status.HTTP_200_OK)
+        # try:
             # limited to 100  recordes    per model to avoid overloading the response and client side
-            school_data = School.objects.prefetch_related(
+            school_data = School.objects.filter(id=school_id).prefetch_related(
                     'finance',
-                    "permissions",
+                    "permissions", 
+                    "sections__classrooms",
+                    "sections__classrooms__student_enrollments",
+                    "subjects__teaching_assignments",
                     Prefetch(
                         "roles",
                         queryset=SchoolRole.objects.exclude(name__exact = "Director").order_by("name")
@@ -64,10 +64,11 @@ class DirectorSchoolDetailView(APIView) :
                         "staffs",
                         queryset=Staff.objects.order_by("joined_at")
                     ),
-                    Prefetch(
-                        "subjects",
-                        queryset=Subject.objects.order_by("-added_at")
-                    ),
+                    # Prefetch(
+                    #     "subjects",
+                    #     queryset=Subject.objects.order_by("-added_at")
+                    # ),
+                    
                     Prefetch(
                         "templates",
                         queryset=Templates.objects.order_by("-created_at")
@@ -80,13 +81,16 @@ class DirectorSchoolDetailView(APIView) :
                         "activity_logs",
                         queryset=ActivityLog.objects.filter(user_id = request.user.id).order_by("-created_at")
                     ),
-                ).get(id=school.id)
+                ).first()
+            if not school_data :
+                return Response({"error":"school not found "},status=status.HTTP_200_OK)
+           
             return Response({ 
                 "success":'school_data', 
-                "school_and_academics" : SchoolSerializer(school).data, 
-                "school_students" : StudentSerializer(school_data.students.all()[:60],many=True).data , 
-                "school_teachers" : TeacherSerializer(school_data.teachers.all()[:60],many=True).data ,
-                "school_staffs"   : StaffDetailSerializer(school_data.staffs.all()[:60],many=True).data,
+                "school_and_academics" : SchoolSerializer(school_data).data, 
+                "school_students" : StudentSerializer(school_data.students.all()[:20],many=True).data , 
+                "school_teachers" : TeacherSerializer(school_data.teachers.all()[:20],many=True).data ,
+                "school_staffs"   : StaffDetailSerializer(school_data.staffs.all()[:20],many=True).data,
                 "school_subjects" : SubjectSerializer(school_data.subjects,many=True).data,
                 "templates" : (TemplatesSerializer(school_data.templates,many=True).data
                                if hasattr(school_data,'templates') else [] ),
@@ -100,8 +104,8 @@ class DirectorSchoolDetailView(APIView) :
                 "school_permissions" : SchoolPermissionSerializer(school_data.permissions,many=True).data,
                 "school_roles" : SchoolRoleSerializer(school_data.roles,many=True).data,
                 }, status=status.HTTP_200_OK)
-        except:
-            return Response({"error":"server error"},status=status.HTTP_200_OK)
+        # except:
+            # return Response({"error":"server error"},status=status.HTTP_200_OK)
         
     def put(self, request, school_id) :
         # try:

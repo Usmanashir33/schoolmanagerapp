@@ -1,43 +1,129 @@
 from rest_framework import serializers
 from .models import SchoolSection
+from student .serializers import MiniStudentSerializer
+from student.models import StudentClassEnrollment
+from teacher .serializers import MiniTeacherSerializer
+from .models import ClassRoom
+
+
+#------------------------------------------------------------------------------------
+#                                       Mini Serializers 
+#####################################################################################
+class MiniClassRoomSerializer(serializers.ModelSerializer) :
+    form_teacher = MiniTeacherSerializer(read_only =True)
+    studentsCount = serializers.SerializerMethodField(read_only = True)
+    teachersCount = serializers.SerializerMethodField(read_only = True)
+    
+    subjects = serializers.SerializerMethodField(read_only = True)
+    def get_subjects(self,obj): 
+        subjects = obj.teaching_assignments.all()
+        return subjects.values('subject__id')
+    
+    def get_studentsCount(self,obj):
+        return obj.student_enrollments.filter(status__in=["active",'enrolled']).count()
+    
+    def get_teachersCount(self,obj):
+        return obj.teaching_assignments.count()
+    class Meta:  
+        model = ClassRoom
+        fields ='__all__'
+        read_only_fields = ['id', 'form_teacher','name',]
 
 #------------------------------------------------------------------------------------
 #                                    SECTION SERIALIZERS
 #------------------------------------------------------------------------------------
-class SchoolSectionSerializer(serializers.ModelSerializer):
-    # school = SchoolSerializer(read_only=True)
-    class Meta:  
-        model = SchoolSection 
-        fields ='__all__'
-        read_only_fields = ['id', 'joined_at']
-        
 class SchoolSectionCreateUpdateSerializer(serializers.ModelSerializer):
+    classesCount = serializers.SerializerMethodField(read_only = True)
+    studentsCount = serializers.SerializerMethodField(read_only = True)
+    teachersCount = serializers.SerializerMethodField(read_only = True)
+    
+    def get_studentsCount(self, obj):
+        return StudentClassEnrollment.objects.filter(
+            class_room__section=obj,
+            status__in=["active", "enrolled"]
+        ).count()
+
+    def get_teachersCount(self, obj):
+        return Teacher.objects.filter(
+            subjects__class_rooms__section=obj
+        ).distinct().count()
+        
+    def get_teachersCount(self,obj):
+        teachers = Teacher.objects.filter(
+            subjects__class_rooms__section=obj
+        ).distinct()
+        return teachers.count()
+
     class Meta:  
         model = SchoolSection 
         fields ='__all__'
         read_only_fields = ['id', 'joined_at']
         
-class SchoolSectionDetailSerializer(serializers.ModelSerializer):
+class SchoolSectionDetailSerializer(serializers.ModelSerializer) :
+    students = serializers.SerializerMethodField(read_only = True)
+    teachers = serializers.SerializerMethodField(read_only = True)
+    
+    def get_students(self,obj):
+        students = StudentClassEnrollment.objects.filter(
+            class_room__section=obj,
+            status__in=["active", "enrolled"]
+        )[:20]
+        return MiniStudentSerializer(students,many=True).data
+    
+    def get_teachers(self, obj):
+        teachers = Teacher.objects.filter(
+            subjects__teaching_assignments__classroom__section=obj
+        ).distinct()[:15]
+        return MiniTeacherSerializer(teachers,many=True).data
+
     class Meta:  
         model = SchoolSection 
         fields ='__all__'
         read_only_fields = ['id', 'joined_at']
-        
-        
         
 
 #--------------------------------------------------------------------------------------
 #                                    CLASSROOM SERIALIZERS
 
 from .models import ClassRoom ,PromotionLog
-from teacher.serializers import TeacherSerializer
-
 class ClassRoomDetailSerializer(serializers.ModelSerializer) :
+    form_teacher = MiniTeacherSerializer(read_only =True)
+    students = serializers.SerializerMethodField(read_only = True)
+    teachers = serializers.SerializerMethodField(read_only = True)
+    
+    subjects = serializers.SerializerMethodField(read_only = True)
+    def get_subjects(self,obj): 
+        subjects = obj.teaching_assignments.all()
+        return subjects.values('subject__id')
+    
+    def get_students(self,obj):
+        students = obj.student_enrollments.filter(status__in=["active",'enrolled'])[:15]
+        return MiniStudentSerializer(students,many=True).data
+    
+    def get_teachers(self,obj) :
+        teachers_map_ids = obj.teaching_assignments.values_list('teacher', flat=True)
+        teachers = Teacher.objects.filter(school = obj.school,id__in = teachers_map_ids)[:15]
+        return MiniTeacherSerializer(teachers,many=True).data
     class Meta:  
         model = ClassRoom 
         fields ='__all__'
-        read_only_fields = ['id', 'joined_at']
+        read_only_fields = ['id', 'form_teacher','name',]
+        
+        
 class ClassRoomCreateUpdateSerializer(serializers.ModelSerializer) :
+    form_teacher = MiniTeacherSerializer(read_only =True)
+    studentsCount = serializers.SerializerMethodField(read_only = True)
+    teachersCount = serializers.SerializerMethodField(read_only = True)
+    subjects = serializers.SerializerMethodField(read_only = True)
+    def get_subjects(self,obj): 
+        subjects = obj.teaching_assignments.all()
+        return subjects.values('subject__id')
+    
+    def get_studentsCount(self,obj):
+        return obj.student_enrollments.filter(status__in=["active",'enrolled']).count()
+    
+    def get_teachersCount(self,obj):
+        return obj.teaching_assignments.values_list('teacher', flat=True).distinct().count()
     class Meta:  
         model = ClassRoom 
         fields ='__all__'
@@ -61,18 +147,44 @@ from django.db import transaction
 
     
 class SubjectSerializer(serializers.ModelSerializer) :
+    teachers= serializers.SerializerMethodField(read_only = True)
+    classes = serializers.SerializerMethodField(read_only = True)
+    def get_classes(self,obj) :
+        classes_map = obj.teaching_assignments.values_list('classroom__id', flat=True).distinct()
+        return classes_map
+    def get_teachers(self,obj) :
+        teachers_map = obj.teachers.values('id', "first_name", "last_name","title",'staff_id')
+        return teachers_map
     class Meta:  
         model = Subject   
         fields ='__all__' 
         read_only_fields = ['id', 'added_at']
     
 class SubjectDetailSerializer(serializers.ModelSerializer) :
+    teachers= serializers.SerializerMethodField(read_only = True)
+    classes = serializers.SerializerMethodField(read_only = True)
+    def get_classes(self,obj) :
+        classes_map = obj.teaching_assignments.values_list('classroom__id', flat=True).distinct()
+        return classes_map
+    
+    def get_teachers(self,obj) : 
+        teachers = obj.teachers
+        return MiniTeacherSerializer(teachers ,many=True).data
     class Meta:  
         model = Subject 
         fields ='__all__' 
         read_only_fields = ['id', 'added_at','class_rooms','teachers']
         
 class SubjectCreateUpdateSerializer(serializers.ModelSerializer) :
+    teachers= serializers.SerializerMethodField(read_only = True)
+    classes = serializers.SerializerMethodField(read_only = True)
+    def get_classes(self,obj) :
+        classes_map = obj.teaching_assignments.values_list('classroom__id', flat=True).distinct()
+        return classes_map
+    
+    def get_teachers(self,obj) :
+        teachers_map = obj.teachers.values('id', "first_name", "last_name","title",'staff_id')
+        return teachers_map
     class Meta:  
         model = Subject 
         fields ='__all__' 
@@ -81,13 +193,13 @@ class SubjectCreateUpdateSerializer(serializers.ModelSerializer) :
     def create(self, validated_data) :
         request = self.context["request"]
         school_id = self.context["school_id"]
-        class_rooms_ids = request.data.get("class_room_ids", [])
-        class_rooms = ClassRoom.objects.filter(section__school__id = school_id, id__in = class_rooms_ids)
+        teachers_ids = request.data.get("teachersIds", [])
+        teachers = Teacher.objects.filter(school_id = school_id, id__in = teachers_ids)
         
         with transaction.atomic():
             subject = Subject.objects.create(**validated_data)
-            if class_rooms:
-                subject.class_rooms.set(class_rooms)
+            if teachers.exists() :
+                subject.teachers.set(teachers)
             subject.save()
         return subject 
     
@@ -95,24 +207,19 @@ class SubjectCreateUpdateSerializer(serializers.ModelSerializer) :
         request = self.context["request"]
         school_id = self.context["school_id"]
         
-        class_room_ids = request.data.get("class_room_ids", [])
-        teachers_ids = request.data.get("teachers", [])
+        teachers_ids = request.data.get("teachersIds", [])
         
-        class_rooms = ClassRoom.objects.filter(section__school__id = school_id, id__in = class_room_ids)
-        
+
         with transaction.atomic():
             # update subject 
             for field ,value in validated_data.items() :
                 setattr(instance,field,value)
             
-            if class_rooms.exists()  :
-                instance.class_rooms.set(class_rooms) 
+            teachers = Teacher.objects.filter(school_id = school_id, id__in = teachers_ids)
+            if teachers.exists()  :
+                instance.teachers.set(teachers) 
                 
-            if teachers_ids is not None:
-                instance.teachers.set (
-                    Teacher.objects.filter(id__in=teachers_ids,school_id =school_id)
-                ) 
-                
+            
             instance.save()
                 
         return instance 

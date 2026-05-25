@@ -99,19 +99,6 @@ class SchoolRoleSerializer(serializers.ModelSerializer) :
                 "picture": user.picture.url if user.picture else None,
                 "email": user.email,
             }
-
-            # if hasattr(user, "director"):
-            #     user_data["director_id"] = user.director.id
-            #     user_data["type"] = "director"
-
-            # elif hasattr(user, "teacher"):
-            #     user_data["teacher_id"] = user.teacher.id
-            #     user_data["type"] = "teacher"
-
-            # elif hasattr(user, "staff"):
-            #     user_data["staff_id"] = user.staff.id
-            #     user_data["type"] = "staff"
-
             users_data.append(user_data)
 
         return users_data

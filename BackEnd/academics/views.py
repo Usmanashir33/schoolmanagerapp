@@ -408,7 +408,7 @@ class AcademicView(APIView):
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
 
     def delete(self, request,school_id,academic_item,item_id,pin):   ## DELETE 
-        try:
+        # try:
             
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
@@ -514,8 +514,8 @@ class AcademicView(APIView):
                     "success": "Subject deleted successfully",
                     "deleted_subject": {"id":item_id}
                 }, status=status.HTTP_200_OK)
-        except Exception as e :
-            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        # except Exception as e :
+            # return Response({"error": "server error"}, status=status.HTTP_200_OK)
 
 
 
