@@ -9,6 +9,7 @@ urlpatterns = [
     path('update-teacher/<str:teacher_id>/',  TeacherCreateView.as_view(), name='update-teacher'),#Tested
     path('get-teacher/<uuid:teacher_id>/',    TeacherCreateView.as_view(), name='get-teacher'),#Tested 
     path('all-teachers/<uuid:school_id>/',    AllTeachersView.as_view(), name='all-teacher'), 
+    path('all-teachers/<uuid:school_id>/<str:class_id>/',    ClassCurrentTeachersListView.as_view(), name='all-teacher'), 
     path('search/teacher/<uuid:school_id>/<str:searchQuery>/', FilterTeacherDetailView.as_view(), name='search-teacher'),#Tested 
     path('manage-teacher/<uuid:school_id>/<str:teacher_id>/<str:request_action>/' ,TeacherAdministrationView.as_view(), name='manage-teacher'),#tasted
     

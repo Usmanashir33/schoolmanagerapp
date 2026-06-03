@@ -10,10 +10,10 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
-from teacher.serializers import TeacherSerializer ,TeacherDetailSerializer,DisplinaryRecordSerializer,TeacherCreateSerializer
+from teacher.serializers import MiniTeacherSerializer, TeacherSerializer ,TeacherDetailSerializer,DisplinaryRecordSerializer,TeacherCreateSerializer
 from teacher.models import Teacher 
 
-from core.custom_pegination import CustomPagination50
+from core.custom_pegination import CustomPagination15
 from school.models import School
 from school.permissions import HasSchoolPermission, SchoolPermissions
 from authUser.models import User 
@@ -65,7 +65,7 @@ class AllTeachersView(APIView): #paginated request
                 .order_by("-joined_at")
             ) 
 
-            paginator = CustomPagination50()
+            paginator = CustomPagination15()
             paginated_teachers = paginator.paginate_queryset(
                 teachers,
                 request
@@ -87,6 +87,37 @@ class AllTeachersView(APIView): #paginated request
 
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        
+class ClassCurrentTeachersListView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [
+        SchoolPermissions.CAN_VIEW_TEACHERS
+    ]
+    
+    # ---------------- GET All Perticuler CLass TEACHER -----------------
+    def get(self, request,school_id,class_id):  
+        try:
+             # find catched data before querying the database
+            cache_key = f"teachers_{school_id}_{class_id}"
+            cached_response = cache.get(cache_key)
+            if cached_response :
+                return Response(cached_response, status=status.HTTP_200_OK)
+            
+            class_students  = Teacher.objects.filter(school__id = school_id).filter(
+                teaching_assignments__classroom__id = class_id,
+            ).distinct()
+            
+            serializer = MiniTeacherSerializer(class_students,many=True) 
+            resp={
+                    "success": "All class teachers",
+                    "classTeachers": serializer.data
+            }
+            cache.set(cache_key, resp, timeout=60*3)  # Cache for 3 minutes
+            return Response(resp, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        
+
 class FilterTeacherDetailView(APIView):
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_VIEW_TEACHERS]
@@ -301,6 +332,7 @@ class DirectorTeacherRecordView(APIView):
             return Response({"error": "Record faild!"}, status=status.HTTP_200_OK)
         except:
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        
 class TeacherAdministrationView(APIView):
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_MANAGE_TEACHERS]

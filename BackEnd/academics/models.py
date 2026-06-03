@@ -47,7 +47,7 @@ class ClassRoom(models.Model) :
     joined_at = models.DateTimeField(auto_now_add=True)
      
     def __str__(self):
-        return f"{self.name} - {self.section.school.name}" 
+        return f"{self.name}" 
     
     class Meta :
         db_table = 'classroom_classroom'

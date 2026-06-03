@@ -1,5 +1,6 @@
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.utils import timezone
+from django.core.cache import cache
 
 # views.py or any view file
 from core.emails.email_templates.emails import generate_school_update_email,generate_school_delete_email
@@ -121,8 +122,84 @@ class DirectorAcademicSettingsView (APIView) :
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
         
-class DirectorClassTransferView(APIView):
-    permission_classes = [DirectorUserPermission]
+class ClassEnrollmentView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS] 
+    
+    def post(self, request):
+        try :
+            pin = request.data.get( "pin" )
+            school_id = request.data.get( "school")
+            
+            target_class_id = request.data.get("targetClassId")
+            students_ids = request.data.get("studentIds")
+            
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            
+            valid_school = School.objects.filter(id=school_id).prefetch_related('students').first()
+            if not valid_school:
+                return Response({"error": "Invalid school  Entry"}, status=status.HTTP_200_OK)
+            
+             #--------------- end  validate director actions -------------------
+            if not all([target_class_id,students_ids]):
+                return Response(
+                    {"error": "Missing required fields"},
+                    status=status.HTTP_200_OK
+                )
+            
+            to_class = ClassRoom.objects.get(
+                id=target_class_id,section__school__id = school_id 
+            ) or None
+            # implement transfer logic 
+            if not to_class :
+                return Response({"error": "Invalid class selection"}, status=status.HTTP_200_OK)  
+            
+            # prevent duplication
+            students = valid_school.students.filter(id__in=students_ids).exclude(
+                Q(class_rooms__class_room__id = target_class_id) & Q(class_rooms__status__in = ['active','enrolled'])
+            ).all()
+            if not students :
+                return Response({"error": "Invalid students Selection"}, status=status.HTTP_200_OK)  
+            
+            ClassRoomServices.enroll_students(
+                students,
+                to_class=to_class,
+            )
+            
+            # get latets data 
+            cls = ClassRoom.objects.filter(
+                id=to_class.id
+                ).prefetch_related(
+                    'student_enrollments__student','teaching_assignments'
+                ).select_related(
+                    'form_teacher'
+                ).annotate(
+                    studentsCount=Count(
+                        "student_enrollments",
+                        filter=Q(
+                            student_enrollments__status__in=["active", "enrolled"]
+                        ),
+                        distinct=True,
+                    ),
+                    teachersCount=Count(
+                        "teaching_assignments__teacher",
+                        distinct=True,
+                    ),
+            ).first()
+            serializer = ClassRoomDetailSerializer(cls).data
+            return Response({
+                "success": f"Student enrolled to {to_class.name} successfully",
+                "enrolled_classroom": serializer
+            }, status=status.HTTP_200_OK )
+                
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)   
+
+class ClassTransferView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS] 
     
     def put(self, request):
         try:
@@ -131,59 +208,141 @@ class DirectorClassTransferView(APIView):
             
             target_class_id = request.data.get("target_class_id")
             current_class_id = request.data.get("current_class_id")
-            session_id = request.data.get("current_session_id")
-            transfer_students_ids = request.data.get("transfer_students_ids")
+            students_ids = request.data.get("transfer_students_ids")
             
-            #--------------- validate director actions -------------------
-            director = request.user.director 
-            
-            if not request.user.pins.checkPin(pin) :
-                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-            
-            valid_school = School.objects.filter(director_id = director.id, id=school_id).first()
-            if not valid_school:
-                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
-            
-             #--------------- end  validate director actions -------------------
-            if not all([school_id, target_class_id, transfer_students_ids,session_id]):
+            #--------------- end  validate director actions -------------------
+            if not all([school_id, target_class_id, students_ids ]):
                 return Response(
                     {"error": "Missing required fields"},
                     status=status.HTTP_200_OK
                 )
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             
-            from_class = ClassRoom.objects.filter(id = current_class_id ).first()
-            to_class = ClassRoom.objects.filter(id=target_class_id ).first()  
+            valid_school = School.objects.filter(id=school_id).prefetch_related('students').first() 
+            if not valid_school:
+                return Response({"error": "Invalid school Entry"}, status=status.HTTP_200_OK)
             
-            # implement transfer logic 
-            if not to_class :
-                return Response({"error": "Invalid class selection"}, status=status.HTTP_200_OK)  
+            from_class = ClassRoom.objects.filter(id = current_class_id,section__school_id=school_id).first()
+            to_class = ClassRoom.objects.filter(id=target_class_id,section__school_id=school_id).first()  
+            if not to_class or not from_class  :
+                return Response({"error": "Invalid class / Already enrolled"}, status=status.HTTP_200_OK)  
             
-            students = Student.objects.filter(id__in=transfer_students_ids, school__id=school_id).all()
-            if not students :
-                return Response({"error": "Invalid students data"}, status=status.HTTP_200_OK)  
+            # prevent duplication and make sure all students are in current class and not in the target class
+            students_active_in_target = valid_school.students.filter(
+                id__in=students_ids,
+                class_rooms__class_room_id=target_class_id,
+                class_rooms__status__in=["active", "enrolled"]
+            ).values_list("id",flat=True)
             
-            session = Session.objects.filter( id=session_id, school=valid_school ).first() 
-            if not session :
-                return Response({"error": "Invalid session"}, status=status.HTTP_200_OK)  
+            students = valid_school.students.filter(
+                id__in=students_ids,
+                class_rooms__class_room_id=current_class_id,
+                class_rooms__status__in=["active", "enrolled"]
+            ).exclude(
+                id__in = students_active_in_target
+            ).distinct()
+                        
+            if  not students :
+                return Response({"error": "Invalid students Selection"}, status=status.HTTP_200_OK)  
             
-            transfered_students = ClassRoomServices.transfer_students(
+            ClassRoomServices.transfer_students(
                 students,
                 to_class=to_class,
                 from_class=from_class,
-                session=session 
-                )
-            
-            serializer = StudentDetailSerializer(transfered_students, many=True, context = {"request":request})
+            )   
+            # get latets data 
+            clses = ClassRoom.objects.filter(
+                id__in=[current_class_id,target_class_id]
+                ).prefetch_related(
+                    'student_enrollments__student','teaching_assignments'
+                ).select_related(
+                    'form_teacher'
+                ).annotate(
+                    studentsCount=Count(
+                        "student_enrollments",
+                        filter=Q(
+                            student_enrollments__status__in=["active", "enrolled"]
+                        ),
+                        distinct=True,
+                    ),
+                    teachersCount=Count(
+                        "teaching_assignments__teacher",
+                        distinct=True,
+                    ),
+            )
+            currentClass = clses.filter(id=current_class_id).first()
+            toClass = clses.filter(id=target_class_id).first()
             return Response({
-                    "success": f"Student Trasfered to {to_class.name} successfully",
-                    "trans_students": serializer.data
+                    "success": f"Students Trasfered to {to_class.name} successfully",
+                    "from_class": ClassRoomDetailSerializer(currentClass).data,
+                    "to_class": {"studentsCount": toClass.studentsCount,'id':toClass.id,'name':toClass.name}
+                }, status=status.HTTP_200_OK )
+                
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)   
+class ClassSubjectManagerView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS] 
+    
+    def post(self, request) :
+        try:
+            pin = request.data.get( "pin" )
+            school_id = request.data.get( "school")
+            
+            class_id = request.data.get("class_id")
+            assignment_mappings = request.data.get("assignment_mappings")
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            
+            valid_school = School.objects.filter(id=school_id).prefetch_related('subjects').first() 
+            if not valid_school:
+                return Response({"error": "Invalid school Entry"}, status=status.HTTP_200_OK)
+            
+            classroom = ClassRoom.objects.filter(id = class_id ,section__school_id=school_id).first()
+            if not classroom :
+                return Response({"error": "Invalid class"}, status=status.HTTP_200_OK)
+            # validate_subjects_ids = valid_school.subjects.values_list('id',flat=True)
+            # start here   
+            
+            ClassRoomServices.subjects_assign(
+                cls=classroom,
+                mappings = assignment_mappings,
+                available_subjects=valid_school.subjects.all(),
+                available_teachers=valid_school.teachers.all()
+            )   
+            # get latets cls  data 
+            cls = ClassRoom.objects.filter(
+                id =class_id
+                ).prefetch_related(
+                    'student_enrollments__student','teaching_assignments'
+                ).select_related(
+                    'form_teacher'
+                ).annotate(
+                    studentsCount=Count(
+                        "student_enrollments",
+                        filter=Q(
+                            student_enrollments__status__in=["active", "enrolled"]
+                        ),
+                        distinct=True,
+                    ),
+                    teachersCount=Count(
+                        "teaching_assignments__teacher",
+                        distinct=True,
+                    ),
+            ).first()
+            return Response({
+                    "success": f"Subjects Assigned to {cls.name} successfully",
+                    "assigned_class": ClassRoomDetailSerializer(cls).data,
                 }, status=status.HTTP_200_OK )
                 
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)   
         
 class DirectorClassPromotionView(APIView):
-    permission_classes = [DirectorUserPermission]
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS] 
     
     def post(self, request):
         # try:
@@ -234,6 +393,84 @@ class DirectorClassPromotionView(APIView):
                     
         # except Exception as e :
             # return Response({"error": "server error"}, status=status.HTTP_200_OK)   
+            
+class AcademicDetailsView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS] 
+    
+    def get(self, request,school_id,academic_item,item_id):   ## add new academic data
+        try:
+           
+            valid_school = School.objects.filter( id=school_id).prefetch_related('sections', 'sections__classrooms','subjects').first()
+            if not valid_school:
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
+            
+            # find catched data before querying the database
+            cache_key = f"academics_{school_id}_{academic_item}_{item_id}"
+            cached_response = cache.get(cache_key)
+            if cached_response :
+                return Response(cached_response, status=status.HTTP_200_OK)
+            
+            #---------------------------SECTION -------------------
+            if academic_item == "sections":
+                section= valid_school.sections.filter(id=item_id).first()
+                if not section :
+                    return Response({"error": "Section not found"}, status=status.HTTP_200_OK)
+                serializer = SchoolSectionDetailSerializer(section)
+                resp = {
+                    "success": "Section",
+                    "section_details": serializer.data
+                }
+                cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+                
+                return Response(resp, status=status.HTTP_200_OK)
+                    
+            #--------------------------- CLASSROOM -------------------
+            if academic_item == "classrooms" :
+                
+                classroom = ClassRoom.objects.filter(id=item_id,section__school__id = school_id).prefetch_related(
+                    'student_enrollments__student','teaching_assignments'
+                ).select_related(
+                    'form_teacher'
+                ).annotate(
+                    studentsCount=Count(
+                        "student_enrollments",
+                        filter=Q(
+                            student_enrollments__status__in=["active", "enrolled"]
+                        ),
+                        distinct=True,
+                    ),
+                    teachersCount=Count(
+                        "teaching_assignments__teacher",
+                        distinct=True,
+                    ),
+                ).first()
+                if not classroom :
+                    return Response({"error": "Classroom not found"}, status=status.HTTP_200_OK)
+                serializer = ClassRoomDetailSerializer(classroom).data
+                resp={
+                    "success": "Classroom",
+                    "classroom_details": serializer 
+                }
+                cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+                
+                return Response(resp, status=status.HTTP_200_OK)
+            
+            #---------------------------SUBJECTS -------------------
+            if academic_item == "subjects":
+                subject = valid_school.subjects.filter(id=item_id).first()
+                if not subject :
+                    return Response({"error": "Subject not found"}, status=status.HTTP_200_OK)
+                serializer = SubjectDetailSerializer(subject)
+                resp = {
+                    "success": "Subject",
+                    "subject_details": serializer.data
+                }
+                cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+                
+                return Response(resp, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
             
 class AcademicView(APIView):
     permission_classes = [HasSchoolPermission]
@@ -310,7 +547,7 @@ class AcademicView(APIView):
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
         
     def put(self, request,academic_item,item_id):   ## update  
-        try:
+        # try:
             pin = request.data.get( "pin" )
             school_id = request.data.get("school")
             
@@ -371,7 +608,25 @@ class AcademicView(APIView):
                 }, status=status.HTTP_200_OK)
                 return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
             
-            #---------------------------SUBJECTS UPDATE-------------------
+            #---------------------------CLASSROOM UPDATE form_teacher -------------------
+            if academic_item == "form_teacher":
+                classroom = ClassRoom.objects.filter(id = item_id ,section__school__id = valid_school.id).first()
+                if not classroom :
+                    return Response({"error": "Class not exist"}, status=status.HTTP_200_OK)
+                t_id = request.data.get("teacherId",None)
+                teacher = valid_school.teachers.filter( id = t_id ).first()
+                if not teacher :
+                    return Response({"error": "Teacher not exist"}, status=status.HTTP_200_OK)
+                classroom.form_teacher = teacher
+                classroom.save()
+                
+                serializer = ClassRoomCreateUpdateSerializer(classroom)
+                return Response({
+                    "success": "Classroom updated successfully",
+                    "form_classroom": serializer.data 
+                    }, status=status.HTTP_200_OK)
+                
+            #---------------------------SUBJECTS UPDATE--------------------
             if academic_item == "subjects":
                 # validate section 
                 name = request.data.get('name')
@@ -404,8 +659,9 @@ class AcademicView(APIView):
                     "updated_subject": serializer.data
                 }, status=status.HTTP_200_OK)
                 return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
-        except Exception as e :
-            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        
+        # except Exception as e :
+            # return Response({"error": "server error"}, status=status.HTTP_200_OK)
 
     def delete(self, request,school_id,academic_item,item_id,pin):   ## DELETE 
         # try:

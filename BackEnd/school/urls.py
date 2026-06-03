@@ -5,7 +5,8 @@ from . views import  *
 urlpatterns = [
     # Define your URL patterns here  
     
-    path('register-new-school/', SchoolAndDirectorCreateView.as_view(), name='create-school'), #tested
+    path('register-new-school/', SchoolAndDirectorCreateView.as_view(), name='create-school'), #tested done 
+    path('userlogs/<uuid:school_id>/', AllUserLogsView.as_view(), name='userlogs'), #tested done
     
     path('role/create/', SchoolRoleView.as_view(), name='role'),
     path('role/update/<str:role_id>/', SchoolRoleView.as_view(), name='update-role'),

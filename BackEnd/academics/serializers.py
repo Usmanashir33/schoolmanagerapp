@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import SchoolSection
 from student .serializers import MiniStudentSerializer
-from student.models import StudentClassEnrollment
+from student.models import StudentClassEnrollment,Student
 from teacher .serializers import MiniTeacherSerializer
 from .models import ClassRoom
 
@@ -59,7 +59,7 @@ class SchoolSectionCreateUpdateSerializer(serializers.ModelSerializer):
         fields ='__all__'
         read_only_fields = ['id', 'joined_at']
         
-class SchoolSectionDetailSerializer(serializers.ModelSerializer) :
+class SchoolSectionDetailSerializer(serializers.ModelSerializer):
     students = serializers.SerializerMethodField(read_only = True)
     teachers = serializers.SerializerMethodField(read_only = True)
     
@@ -67,7 +67,7 @@ class SchoolSectionDetailSerializer(serializers.ModelSerializer) :
         students = StudentClassEnrollment.objects.filter(
             class_room__section=obj,
             status__in=["active", "enrolled"]
-        )[:20]
+        )[:15]
         return MiniStudentSerializer(students,many=True).data
     
     def get_teachers(self, obj):
@@ -90,19 +90,22 @@ class ClassRoomDetailSerializer(serializers.ModelSerializer) :
     form_teacher = MiniTeacherSerializer(read_only =True)
     students = serializers.SerializerMethodField(read_only = True)
     teachers = serializers.SerializerMethodField(read_only = True)
-    
     subjects = serializers.SerializerMethodField(read_only = True)
+    studentsCount = serializers.IntegerField(read_only=True)
+    teachersCount = serializers.IntegerField(read_only=True)
+    
     def get_subjects(self,obj): 
         subjects = obj.teaching_assignments.all()
         return subjects.values('subject__id')
     
     def get_students(self,obj):
-        students = obj.student_enrollments.filter(status__in=["active",'enrolled'])[:15]
+        studentIds = obj.student_enrollments.filter(status__in=["active",'enrolled']).values_list('student',flat=True)
+        students = Student.objects.filter(id__in = studentIds)[:15]
         return MiniStudentSerializer(students,many=True).data
     
     def get_teachers(self,obj) :
-        teachers_map_ids = obj.teaching_assignments.values_list('teacher', flat=True)
-        teachers = Teacher.objects.filter(school = obj.school,id__in = teachers_map_ids)[:15]
+        teachers_map_ids = obj.teaching_assignments.values_list('teacher__id', flat=True)
+        teachers = Teacher.objects.filter(school = obj.section.school,id__in = teachers_map_ids)[:15]
         return MiniTeacherSerializer(teachers,many=True).data
     class Meta:  
         model = ClassRoom 

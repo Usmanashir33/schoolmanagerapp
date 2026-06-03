@@ -3,6 +3,7 @@ from django.db.models import Q
 from core.formatters import format_serializer_errors
 # from core.permissions import DirectorUserPermission
 from school.permissions import HasSchoolPermission,SchoolPermissions
+from django.core.cache import cache
 
 from rest_framework.views import APIView
 from rest_framework import status
@@ -10,9 +11,9 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
 
 from school.tasks import SchoolServices
-from .serializers import StudentSerializer,StudentDetailSerializer,StudentCreateSerializer
+from .serializers import MiniStudentSerializer, StudentSerializer,StudentDetailSerializer,StudentCreateSerializer
 
-from core.custom_pegination import CustomPagination50
+from core.custom_pegination import CustomPagination15
 from .models import Student
 from school.models import ActivityLog, School
 from authUser.models import User
@@ -43,7 +44,7 @@ class AllStudentsView(APIView):
             page = request.query_params.get("page", 1)
             cache_key = f"students_{school_id}_page_{page}"
             cached_response = cache.get(cache_key)
-            if cached_response:
+            if cached_response :
                 end = timezone.now()
                 # print(f"Cache hit for {cache_key}: {end - start}")
                 return Response(cached_response, status=status.HTTP_200_OK)
@@ -62,7 +63,7 @@ class AllStudentsView(APIView):
                 .order_by("joined_at")
             ) 
 
-            paginator = CustomPagination50()
+            paginator = CustomPagination15()
 
             paginated_students = paginator.paginate_queryset(
                 students,
@@ -109,6 +110,35 @@ class FilterStudentDetailView(APIView):
                     "success": "searchResults",
                     "results": serializer.data
             }, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+class ClassCurrentStudentsListView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [
+        SchoolPermissions.CAN_VIEW_STUDENTS
+    ]
+    
+    # ---------------- GET All Perticuler CLass STUDENT -----------------
+    def get(self, request,school_id,class_id):  
+        try:
+             # find catched data before querying the database
+            cache_key = f"students_{school_id}_{class_id}"
+            cached_response = cache.get(cache_key)
+            if cached_response :
+                return Response(cached_response, status=status.HTTP_200_OK)
+            
+            class_students  = Student.objects.filter(school__id = school_id).filter(
+                class_rooms__class_room__id = class_id,
+                class_rooms__status__in = ["active","enrolled"]
+            )
+            
+            serializer = MiniStudentSerializer(class_students,many=True) 
+            resp={
+                    "success": "all class students",
+                    "classStudents": serializer.data
+            }
+            cache.set(cache_key, resp, timeout=60*3)  # Cache for 3 minutes
+            return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
         

@@ -37,7 +37,7 @@ class StudentClassEnrollment(models.Model):
         choices = [
             ('active', 'Active'), # currently enrolled and attending classes
             ('promoted', 'Promoted')  , # promoted to next class but not yet attending classes
-            ('transfered', 'Transfered')  , # promoted to next class from another class 
+            ('transferred', 'Transferred')  , # trasferred to next class from another class 
             ('demoted', 'Demoted'), # demoted to previous class but not yet attending classes
             ('enrolled', 'Enrolled'), # newly enrolled but not yet attending classes
             ('withdrawn', 'Withdrawn') # withdrawn from the class and not attending classes
@@ -54,7 +54,7 @@ class Student(models.Model) :
     user = models.OneToOneField(User, on_delete=models.SET_NULL,blank=True,related_name='student', null=True)
     
     first_name = models.CharField(max_length=100, db_index=True) 
-    last_name = models.CharField(max_length=100, db_index=True) 
+    last_name = models.CharField(max_length=100, db_index=True)  
     middle_name = models.CharField(max_length=100, blank=True,)  
     phone = models.CharField(max_length=100, blank=True,unique=True,null=True, db_index=True)  
     email = models.EmailField(db_index=True,blank=True, null=True) 

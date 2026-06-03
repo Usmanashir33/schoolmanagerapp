@@ -3,9 +3,12 @@ from datetime import timedelta
 from django.utils import timezone 
 from django.db import transaction
 from django.db.models import Q
+from django.core.cache import cache
 
 # core app
 # views.py or any view file
+from core.custom_pegination import CustomPagination15
+from core.custom_pegination import CustomPagination15
 from core.emails.email_templates.emails import generate_otp_email,generate_login_email,generate_registration_email
 from core.emails.email_templates.emails import generate_school_update_email,generate_school_delete_email
 from core.tasks import send_html_email,send_ordinary_sms
@@ -22,8 +25,8 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
 
 from school.permissions import HasSchoolPermission,SchoolPermissions
-from .models import  FinanceSettings, School ,SchoolDeleteRequest, SchoolRole,SchoolPermission
-from .serializers import SchoolBankAccountSerializer, SchoolPermissionSerializer, SchoolPermissionSerializer, SchoolRoleSerializer, TemplatesSerializer
+from .models import  ActivityLog, FinanceSettings, School ,SchoolDeleteRequest, SchoolRole,SchoolPermission
+from .serializers import ActivityLogSerializer, SchoolBankAccountSerializer, SchoolPermissionSerializer, SchoolPermissionSerializer, SchoolRoleSerializer, TemplatesSerializer
 from director.models import Director 
 from authUser.models import User,PendingEmail
 from authUser.serializers import MiniUserSerializer
@@ -245,6 +248,41 @@ class SchoolAndDirectorCreateView(APIView) :
         except :
            return Response({"error":"server error"},status=status.HTTP_200_OK)
        
+class AllUserLogsView(APIView): #paginated request
+    # permission_classes = [HasSchoolPermission]
+    # required_permissions = [SchoolPermissions.CAN_VIEW_STAFFS]
+    
+    # ---------------- GET  ALL User Logs -----------------
+    def get(self, request,school_id):  
+        try:
+            # get all User Logs of the school
+            page = request.query_params.get("page", 1)
+            cache_key = f"activity_{request.user.id}_{school_id}_page_{page}"
+            cached_response = cache.get(cache_key)
+            
+            if cached_response:
+                return Response(cached_response, status=status.HTTP_200_OK)
+            logs  = ActivityLog.objects.filter(school_id = school_id,user__id = request.user.id)
+            paginator =     CustomPagination15()
+            paginated_logs = paginator.paginate_queryset(
+                logs,
+                request
+            )
+
+            serializer =    ActivityLogSerializer(
+                paginated_logs,
+                many=True
+            ).data
+
+            resp=paginator.get_paginated_response({
+                "success": "School Users Logs", 
+                "paginated_data": serializer
+            })
+            cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+            return Response(resp, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+
 class SchoolRoleView(APIView) :
     permission_classes=[HasSchoolPermission]
     permissions_required = [
@@ -557,4 +595,3 @@ class SchoolFinanceView(APIView) :
                 return Response({"template":serializer.data}, status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
-        

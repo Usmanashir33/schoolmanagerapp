@@ -36,19 +36,24 @@ class TeacherSerializer(serializers.ModelSerializer):
         model = Teacher 
         fields ='__all__'
         read_only_fields = ['id', 'joined_at']
+        
 class MiniTeacherSerializer(serializers.ModelSerializer):
     picture = serializers.SerializerMethodField(read_only=True)
+    is_active = serializers.SerializerMethodField(read_only=True)
     
     def get_picture(self, obj):
         return obj.picture.url if obj.picture else None
+    
+    def get_is_active(self, obj):
+        return obj.user.is_active
     class Meta:
         model = Teacher
-        fields = '__all__'
+        fields = ['id',"staff_id",'first_name',"last_name",'middle_name','title','picture','is_active']
         read_only_fields = ['id',"staff_id",'first_name',"last_name",'middle_name','email','picture']
 
  
 
-class TeacherDetailSerializer(serializers.ModelSerializer):
+class TeacherDetailSerializer(serializers.ModelSerializer) :
     picture = serializers.SerializerMethodField()
     user = MiniUserSerializer(read_only = True)
     bank_details = BankSerializer(read_only = True )

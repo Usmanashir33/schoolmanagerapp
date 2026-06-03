@@ -2,7 +2,7 @@ from django.db.models.signals import pre_save, post_save,post_delete
 from django.dispatch import receiver
 from authUser.models import User
 from .models import Director
-from school.models import School,SchoolPermission, SchoolRole
+from school.models import ActivityLog, School,SchoolPermission, SchoolRole
 
 # update director 
 @receiver(post_save, sender=Director) 
@@ -19,7 +19,7 @@ def update_director_user(sender, instance, **kwargs):
         user.role = instance.role
         user.gender = instance.gender
         user.save()
-        
+
 # # create permissions for director when school is created
 @receiver(post_save, sender=SchoolPermission) 
 def create_director_permission_settings(sender, instance, created ,**kwargs):
@@ -33,6 +33,7 @@ def create_director_permission_settings(sender, instance, created ,**kwargs):
             ):
             director.user.school_role.permissions.add(instance)
             director.user.save()
+            
 # if permission is deleted 
 @receiver(post_delete, sender=SchoolPermission)
 def remove_director_permission_settings(  sender,  instance,  **kwargs): 

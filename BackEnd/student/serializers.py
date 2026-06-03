@@ -75,12 +75,16 @@ class StudentDetailFetchSerializer(serializers.ModelSerializer):
     }
 class MiniStudentSerializer(serializers.ModelSerializer):
     picture = serializers.SerializerMethodField(read_only=True)
+    is_active = serializers.SerializerMethodField(read_only=True)
     
     def get_picture(self, obj):
         return obj.picture.url if obj.picture else None
+    
+    def get_is_active(self, obj):
+        return obj.user.is_active
     class Meta:
         model = Student
-        fields = '__all__'
+        fields = ['id',"admission_number",'first_name',"last_name",'middle_name','email','picture','is_active']
         read_only_fields = ['id',"admission_number",'first_name',"last_name",'middle_name','email','picture']
 class StudentDetailSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)

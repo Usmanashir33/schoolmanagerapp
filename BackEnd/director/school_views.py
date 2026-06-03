@@ -1,9 +1,11 @@
+from core.custom_pegination import CustomPagination15
 from finance.models import *
 from finance.serializers import SchoolFeeSerializer
 from django.db.models import Prefetch,Q
 from django.core.files.uploadedfile import UploadedFile
 from core.emails.email_templates.emails import generate_school_update_email,generate_school_delete_email
 from core.tasks import send_html_email,send_ordinary_sms
+from django.core.cache import cache
 
 from core.permissions import DirectorUserPermission
 from core.serializers import SchoolSerializer 
@@ -15,6 +17,7 @@ from rest_framework.parsers import MultiPartParser,FormParser
 from school.models import *
 from academics.models import *
 from academics.serializers import PromotionLogSerializer,SubjectSerializer
+from school.permissions import HasSchoolPermission, SchoolPermissions
 from teacher.models import *
 from staff.models import *
 from staff.serializers import StaffDetailSerializer
@@ -64,10 +67,6 @@ class DirectorSchoolDetailView(APIView) :
                         "staffs",
                         queryset=Staff.objects.order_by("joined_at")
                     ),
-                    # Prefetch(
-                    #     "subjects",
-                    #     queryset=Subject.objects.order_by("-added_at")
-                    # ),
                     
                     Prefetch(
                         "templates",
@@ -88,15 +87,15 @@ class DirectorSchoolDetailView(APIView) :
             return Response({ 
                 "success":'school_data', 
                 "school_and_academics" : SchoolSerializer(school_data).data, 
-                "school_students" : StudentSerializer(school_data.students.all()[:20],many=True).data , 
-                "school_teachers" : TeacherSerializer(school_data.teachers.all()[:20],many=True).data ,
-                "school_staffs"   : StaffDetailSerializer(school_data.staffs.all()[:20],many=True).data,
+                "school_students" : StudentSerializer(school_data.students.all()[:15],many=True).data , 
+                "school_teachers" : TeacherSerializer(school_data.teachers.all()[:15],many=True).data ,
+                "school_staffs"   : StaffDetailSerializer(school_data.staffs.all()[:15],many=True).data,
                 "school_subjects" : SubjectSerializer(school_data.subjects,many=True).data,
                 "templates" : (TemplatesSerializer(school_data.templates,many=True).data
                                if hasattr(school_data,'templates') else [] ),
                 "promotion_logs" : (PromotionLogSerializer(school_data.promotion_logs.all()[:30],many=True).data
                                if hasattr(school_data,'promotion_logs') else [] ),
-                "activity_logs" : (ActivityLogSerializer(school_data.activity_logs.all()[:100],many=True).data
+                "activity_logs" : (ActivityLogSerializer(school_data.activity_logs.all()[:15],many=True).data
                                if hasattr(school_data,'activity_logs') else [] ),
                 "finance" : (FinanceSettingsSerializer(school_data.finance).data
                             if hasattr(school_data,'finance') else []),

@@ -16,8 +16,8 @@ class SchoolSectionAdmin(admin.ModelAdmin):
 from .models import ClassRoom,PromotionLog
  
 @admin.register(ClassRoom)
-class ClassRoomAdmin(admin.ModelAdmin):
-    list_display =["name","section","joined_at"]
+class ClassRoomAdmin(admin.ModelAdmin) :
+    list_display =["name","section","joined_at"]  
     search_fields =['name','section__name','id']
     
 @admin.register(PromotionLog)

@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models  import Q
 from django.utils import timezone 
@@ -53,14 +54,68 @@ class ClassRoomServices :
     
     @staticmethod
     @transaction.atomic
-    def transfer_students(students,to_class,from_class,session): 
-        for student in students :
-            status = 'enrolled'
-            if from_class : 
-                # remove student from current class 
-                status = ' active ' 
-                StudentClassEnrollment.objects.filter(Q(student=student, class_room=from_class), Q(status__in =['active','enrolled']) ).update(status='transfered', date_left = timezone.now())
-            # add student to new class 
-            StudentClassEnrollment.objects.create(student=student, class_room=to_class, status=status,session=session)
-        
+    def transfer_students(students, to_class, from_class):
+        student_ids = list(
+            students.values_list("id", flat=True)
+        )
+        now = timezone.now()
+
+        if from_class:
+            StudentClassEnrollment.objects.filter(
+                student__id__in=student_ids,
+                class_room=from_class,
+            ).update(
+                status="transferred",
+                date_left=now
+            )
+
+            status = "active"
+        else:
+            status = "enrolled"
+
+        StudentClassEnrollment.objects.bulk_create([
+            StudentClassEnrollment(
+                student=student ,
+                class_room=to_class ,
+                status=status ,
+            )
+            for student in students
+        ])
+
+        cache.delete_pattern(
+            f"academics_{to_class.section.school.id}_*"
+        )
+
         return students
+    
+    @staticmethod
+    @transaction.atomic
+    def enroll_students(students,to_class): 
+        StudentClassEnrollment.objects.bulk_create(
+            (
+                StudentClassEnrollment(
+                    student=student,
+                    class_room=to_class,
+                    status="enrolled"
+                )
+                for student in students
+            ),
+            batch_size=1000
+        )
+        cache.delete_pattern(
+            f"academics_{to_class.section.school.id}_*"
+        )
+        return students
+    
+    @staticmethod
+    @transaction.atomic
+    def subjects_assign(cls, mappings,available_subjects,available_teachers) :
+        # Implementation for assigning subjects to a class
+        for mapping in mappings:
+            subject_id = mapping.get("subjectId")
+            teacher_id = mapping.get("teacherId")
+            if subject_id and teacher_id:
+                cls.teaching_assignments.create(
+                    subject_id = subject_id,
+                    teacher_id = teacher_id
+                )

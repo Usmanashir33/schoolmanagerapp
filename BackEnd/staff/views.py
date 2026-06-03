@@ -22,7 +22,7 @@ from school.tasks import SchoolServices
 from staff.serializers import StaffDetailSerializer,StaffCreateUpdateSerializer
 from staff.models import Staff
 
-from core.custom_pegination import CustomPagination50
+from core.custom_pegination import CustomPagination15
 from academics.models import ClassRoom
 from school.models import School
 
@@ -57,7 +57,7 @@ class AllStaffsView(APIView): #paginated request
                 'activity_role'
             ).order_by("joined_at")
             
-            paginator = CustomPagination50()
+            paginator = CustomPagination15()
 
             paginated_students = paginator.paginate_queryset(
                 staffs,
@@ -237,7 +237,7 @@ class StaffAdministrationView(APIView):
                 staff.delete()
                  # configuring activity log data 
                 new_log = ActivityLog.objects.create(
-                    school = valid_school,
+                    school = valid_school ,
                     user=request.user,
                     action="DELETE",
                     module="STAFF",

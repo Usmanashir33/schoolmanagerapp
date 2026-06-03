@@ -4,7 +4,7 @@ from authUser.models import User
 from django.core.mail import send_mail
 
 from django.core.exceptions import ValidationError
-from .models import School, SchoolRole,Templates ,FinanceSettings,Term,Session ,SchoolPermission
+from .models import ActivityLog, School, SchoolRole,Templates ,FinanceSettings,Term,Session ,SchoolPermission
 import string
 import random
 from .custom_templates import CUSTOM_TEMPLATE_LIST
@@ -13,6 +13,15 @@ def generate_random_password(length=8):
     """Generate a random password with letters and digits"""
     chars = string.ascii_letters + string.digits
     return ''.join(random.choices(chars, k=length)) 
+
+from django.core.cache import cache
+@receiver(post_save, sender=ActivityLog) 
+def reset_user_log_caches(sender, instance, created ,**kwargs):
+    # Clear the cache for the user's logs
+    cache.delete_pattern(
+        f"activity_{instance.user.id}_{instance.school.id}_*"
+    )
+    
         
 @receiver(post_save, sender=School) 
 def create_finance_settings(sender, instance, created ,**kwargs):

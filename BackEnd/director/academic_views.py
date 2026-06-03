@@ -25,7 +25,7 @@
 # from subject.serializers import SubjectDetailSerializer
 # from subject.models import Subject
 
-# from core.custom_pegination import CustomPagination50
+# from core.custom_pegination import CustomPagination15
 # from classroom.models import ClassRoom
 # from school.models import School
 # from classroom.models import ClassRoom ,PromotionLog
