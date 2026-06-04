@@ -14,11 +14,10 @@ class MiniClassRoomSerializer(serializers.ModelSerializer) :
     studentsCount = serializers.SerializerMethodField(read_only = True)
     teachersCount = serializers.SerializerMethodField(read_only = True)
     
-    subjects = serializers.SerializerMethodField(read_only = True)
-    def get_subjects(self,obj): 
-        subjects = obj.teaching_assignments.all()
-        return subjects.values('subject__id')
-    
+    subjectsCount = serializers.SerializerMethodField(read_only = True)
+    def get_subjectsCount(self,obj): 
+        return obj.teaching_assignments.all().count()
+
     def get_studentsCount(self,obj):
         return obj.student_enrollments.filter(status__in=["active",'enrolled']).count()
     
@@ -95,8 +94,16 @@ class ClassRoomDetailSerializer(serializers.ModelSerializer) :
     teachersCount = serializers.IntegerField(read_only=True)
     
     def get_subjects(self,obj): 
-        subjects = obj.teaching_assignments.all()
-        return subjects.values('subject__id')
+        ass = obj.teaching_assignments.all()
+        # return subjects.values('subject_id',)
+        return [{
+            'id':s.subject.id,
+            "teacher":{
+                "id":s.teacher.id,
+                "name":f"{s.teacher.title} {s.teacher.first_name} {s.teacher.last_name}",
+                "staff_id":s.teacher.staff_id,
+            }
+        } for s in ass]
     
     def get_students(self,obj):
         studentIds = obj.student_enrollments.filter(status__in=["active",'enrolled']).values_list('student',flat=True)

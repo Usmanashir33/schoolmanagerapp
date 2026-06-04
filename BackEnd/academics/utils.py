@@ -4,6 +4,7 @@ from django.db.models  import Q
 from django.utils import timezone 
 import time 
 
+from academics.models import TeachingAssignment
 from student.models import (
     StudentClassEnrollment
 )
@@ -109,13 +110,39 @@ class ClassRoomServices :
     
     @staticmethod
     @transaction.atomic
-    def subjects_assign(cls, mappings,available_subjects,available_teachers) :
+    def subjects_assign(school,cls, mappings) :
         # Implementation for assigning subjects to a class
-        for mapping in mappings:
-            subject_id = mapping.get("subjectId")
-            teacher_id = mapping.get("teacherId")
-            if subject_id and teacher_id:
-                cls.teaching_assignments.create(
-                    subject_id = subject_id,
-                    teacher_id = teacher_id
+        TeachingAssignment.objects.bulk_create(
+            (
+                TeachingAssignment(
+                    subject=mapping["subject"],
+                    teacher=mapping["teacher"],
+                    classroom=cls,
+                    school=school
                 )
+                for mapping in mappings
+            ),
+            batch_size=1000
+        )
+        
+        cache.delete_pattern(
+            f"academics_{school.id}_*"
+        )
+    @staticmethod
+    @transaction.atomic
+    def subjects_re_assign(school,mappings) :
+        # Implementation for re_assigning subjects to a class
+        to_update = []
+        for mapping in mappings :
+            assignment = mapping.get("assignment")
+            if assignment :
+                assignment.teacher = mapping.get("teacher")
+                to_update.append(assignment)
+        TeachingAssignment.objects.bulk_update(
+            to_update,
+            ['teacher'],
+            batch_size=1000
+        )
+        cache.delete_pattern(
+            f"academics_{school.id}_*"
+        )

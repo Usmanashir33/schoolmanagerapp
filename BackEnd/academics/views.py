@@ -288,29 +288,71 @@ class ClassSubjectManagerView(APIView):
     def post(self, request) :
         try:
             pin = request.data.get( "pin" )
-            school_id = request.data.get( "school")
-            
-            class_id = request.data.get("class_id")
-            assignment_mappings = request.data.get("assignment_mappings")
+            school_id = request.data.get("school")
+            class_id = request.data.get("classId")
+            assignment_mappings = request.data.get("mappings")
             
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             
-            valid_school = School.objects.filter(id=school_id).prefetch_related('subjects').first() 
+            valid_school = School.objects.filter(id=school_id).prefetch_related('subjects','teachers').first() 
             if not valid_school:
                 return Response({"error": "Invalid school Entry"}, status=status.HTTP_200_OK)
             
-            classroom = ClassRoom.objects.filter(id = class_id ,section__school_id=school_id).first()
+            classroom = ClassRoom.objects.filter(
+                id = class_id ,section__school_id=school_id
+            ).prefetch_related(
+                'teaching_assignments'
+            ).first()
             if not classroom :
                 return Response({"error": "Invalid class"}, status=status.HTTP_200_OK)
-            # validate_subjects_ids = valid_school.subjects.values_list('id',flat=True)
-            # start here   
             
+            subject_ids = [m.get("subjectId") for m in assignment_mappings]
+            teacher_ids = [m.get("teacherId") for m in assignment_mappings]
+
+            existing_subject_ids = set(
+                classroom.teaching_assignments
+                .filter(subject__id__in=subject_ids)
+                .values_list("subject__id", flat=True)
+            )
+
+            subjects = {
+                sub.id: sub
+                for sub in valid_school.subjects.filter(
+                    id__in=subject_ids
+                ).exclude(
+                    id__in=existing_subject_ids
+                )
+            }
+
+            teachers = {
+                teacher.id: teacher
+                for teacher in valid_school.teachers.filter(
+                    id__in=teacher_ids
+                )
+            }
+
+            valid_mappings = []
+
+            for mapping in assignment_mappings:
+                sub_id = mapping.get("subjectId")
+                tea_id = mapping.get("teacherId")
+                ready_map ={  "subject": None,  "teacher": None,}  
+                            
+                if not subjects.get(sub_id) :
+                    continue
+                ready_map["subject"] = subjects[sub_id]
+                if teachers.get(tea_id):
+                    ready_map["teacher"] = teachers[tea_id]
+
+                valid_mappings.append(ready_map)
+            if not valid_mappings :
+                return Response({"error": "No valid subject-teacher mappings provided"}, status=status.HTTP_200_OK)
+
             ClassRoomServices.subjects_assign(
+                school = valid_school,
                 cls=classroom,
-                mappings = assignment_mappings,
-                available_subjects=valid_school.subjects.all(),
-                available_teachers=valid_school.teachers.all()
+                mappings = valid_mappings,
             )   
             # get latets cls  data 
             cls = ClassRoom.objects.filter(
@@ -334,12 +376,168 @@ class ClassSubjectManagerView(APIView):
             ).first()
             return Response({
                     "success": f"Subjects Assigned to {cls.name} successfully",
-                    "assigned_class": ClassRoomDetailSerializer(cls).data,
+                    "assigned_subject_class": ClassRoomDetailSerializer(cls).data,
                 }, status=status.HTTP_200_OK )
                 
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)   
-        
+    
+    def put(self, request) :
+        try:
+            pin = request.data.get( "pin" )
+            school_id = request.data.get("school")
+            class_id = request.data.get("classId")
+            assignment_mappings = request.data.get("mappings")
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            
+            valid_school = School.objects.filter(id=school_id).prefetch_related('subjects','teachers').first() 
+            if not valid_school:
+                return Response({"error": "Invalid school Entry"}, status=status.HTTP_200_OK)
+            
+            classroom = ClassRoom.objects.filter(
+                id = class_id ,section__school_id=school_id
+            ).prefetch_related(
+                'teaching_assignments'
+            ).first()
+            if not classroom :
+                return Response({"error": "Invalid class"}, status=status.HTTP_200_OK)
+            
+            subject_ids = [m.get("subjectId") for m in assignment_mappings]
+            teacher_ids = [m.get("teacherId") for m in assignment_mappings]
+
+            assignments = {
+                assignment.subject.id : assignment
+                for assignment in classroom.teaching_assignments.filter(
+                    subject__id__in=subject_ids
+                ).distinct()
+            }
+
+            teachers = {
+                teacher.id: teacher
+                for teacher in valid_school.teachers.filter(
+                    id__in=teacher_ids
+                )
+            }
+
+            valid_assignments = []
+
+            for mapping in assignment_mappings:
+                sub_id = mapping.get("subjectId")
+                tea_id = mapping.get("teacherId")
+                ready_map ={  "assignment": None,  "teacher": None,}  
+                            
+                if not assignments.get(sub_id) :
+                    continue
+                ready_map["assignment"] = assignments[sub_id]
+                if teachers.get(tea_id) :
+                    ready_map["teacher"] = teachers[tea_id]
+
+                valid_assignments.append(ready_map)
+            if not valid_assignments :
+                return Response({"error": "No valid subject-teacher mappings provided"}, status=status.HTTP_200_OK)
+
+            ClassRoomServices.subjects_re_assign(
+                school = valid_school,
+                mappings = valid_assignments,
+            )   
+            # get latets cls  data 
+            cls = ClassRoom.objects.filter(
+                id =class_id
+                ).prefetch_related(
+                    'student_enrollments__student','teaching_assignments'
+                ).select_related(
+                    'form_teacher'
+                ).annotate(
+                    studentsCount=Count(
+                        "student_enrollments",
+                        filter=Q(
+                            student_enrollments__status__in=["active", "enrolled"]
+                        ),
+                        distinct=True,
+                    ),
+                    teachersCount=Count(
+                        "teaching_assignments__teacher",
+                        distinct=True,
+                    ),
+            ).first()
+            data= ClassRoomDetailSerializer(cls).data
+            return Response({
+                    "success": f"Subjects Ressigned to {cls.name} successfully",
+                    "reassigned_subject_class": {
+                        "id":data['id'],
+                        'subjects':data['subjects'],
+                        'tachersCount' :data['teachersCount'],
+                        'teachers':data['teachers'],
+                    }
+                }, status=status.HTTP_200_OK )
+                
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)   
+         
+    def delete(self, request,school_id,class_id,subject_id,pin) :
+        try:
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            
+            valid_school = School.objects.filter(id=school_id).prefetch_related('subjects','teachers').first() 
+            if not valid_school:
+                return Response({"error": "Invalid school Entry"}, status=status.HTTP_200_OK)
+            
+            classroom = ClassRoom.objects.filter(
+                id = class_id ,section__school_id=school_id
+            ).prefetch_related(
+                'teaching_assignments'
+            ).first()
+            if not classroom :
+                return Response({"error": "Invalid class"}, status=status.HTTP_200_OK)
+            
+            
+            assignment = classroom.teaching_assignments.filter(
+                subject__id = subject_id
+                ).first()
+            if not assignment :
+                return Response({"error": "No valid subject-teacher "}, status=status.HTTP_200_OK)
+            
+            #.................DELETION ACTION ................
+            assignment.delete()
+           
+            # get latets cls  data 
+            cls = ClassRoom.objects.filter(
+                id =class_id
+                ).prefetch_related(
+                    'student_enrollments__student','teaching_assignments'
+                ).select_related(
+                    'form_teacher'
+                ).annotate(
+                    studentsCount=Count(
+                        "student_enrollments",
+                        filter=Q(
+                            student_enrollments__status__in=["active", "enrolled"]
+                        ),
+                        distinct=True,
+                    ),
+                    teachersCount=Count(
+                        "teaching_assignments__teacher",
+                        distinct=True,
+                    ),
+            ).first()
+            data= ClassRoomDetailSerializer(cls).data
+            return Response({
+                    "success": f"Subject deleted from {cls.name} successfully",
+                    "delassigned_subject_class": {
+                        "id":data['id'],
+                        'subjects':data['subjects'],
+                        'tachersCount' :data['teachersCount'],
+                        'teachers':data['teachers'],
+                    }
+                }, status=status.HTTP_200_OK )
+                
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)   
+         
 class DirectorClassPromotionView(APIView):
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS] 
@@ -547,7 +745,7 @@ class AcademicView(APIView):
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
         
     def put(self, request,academic_item,item_id):   ## update  
-        # try:
+        try:
             pin = request.data.get( "pin" )
             school_id = request.data.get("school")
             
@@ -660,11 +858,11 @@ class AcademicView(APIView):
                 }, status=status.HTTP_200_OK)
                 return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
         
-        # except Exception as e :
-            # return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
 
     def delete(self, request,school_id,academic_item,item_id,pin):   ## DELETE 
-        # try:
+        try:
             
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
@@ -770,8 +968,8 @@ class AcademicView(APIView):
                     "success": "Subject deleted successfully",
                     "deleted_subject": {"id":item_id}
                 }, status=status.HTTP_200_OK)
-        # except Exception as e :
-            # return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
 
 
 

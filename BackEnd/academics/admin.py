@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 # Register your models here.
-from .models import SchoolSection
+from .models import SchoolSection, TeachingAssignment
 
 #--------------------------------------------------------------------------------------
 #                                    SECTION ADMIN
@@ -23,6 +23,10 @@ class ClassRoomAdmin(admin.ModelAdmin) :
 @admin.register(PromotionLog)
 class PromotionLogAdmin(admin.ModelAdmin):
     list_display =["promoted_by","session","school"]
+@admin.register(TeachingAssignment)
+class TeachingAssignmentAdmin(admin.ModelAdmin):
+    list_display = ["teacher", "subject", "classroom", "assigned_at"]
+    search_fields = ["teacher__first_name", "teacher__last_name", "subject__name", "classroom__name"]
 
 #--------------------------------------------------------------------------------------
 #                                SUBJECT ADMIN

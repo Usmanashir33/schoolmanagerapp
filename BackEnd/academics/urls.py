@@ -10,6 +10,9 @@ urlpatterns = [
     
     path('class/enrollment/', ClassEnrollmentView.as_view(), name='class-enrollment') , # done
     path('class/transfer/', ClassTransferView.as_view(), name='class-transfer') , # done
-    path('class/subject-manager/', ClassSubjectManagerView.as_view(), name='class-transfer') ,
+    path('class/subject-assignment/', ClassSubjectManagerView.as_view(), name='class-subject-assignment') , # done
+    path('class/subject-substitution/', ClassSubjectManagerView.as_view(), name='class-subject-substitution') , #Done
+    path('class/subject-deletion/<uuid:school_id>/<str:class_id>/<str:subject_id>/<str:pin>/', ClassSubjectManagerView.as_view(), name='class-subject-deletion') ,#Done
+    
     path('class/promotion/', DirectorClassPromotionView.as_view(), name='class-promotion') ,
 ]

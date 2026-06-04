@@ -187,15 +187,17 @@ class Subject(models.Model) :
         ]
      
     def __str__(self):
-        return self.school + " " + self.name + " " + self.code 
+        return self.school.name + " " + self.name + " " + self.code 
     
 class TeachingAssignment(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE)
 
     teacher = models.ForeignKey(
         Teacher,
-        on_delete=models.CASCADE,
-        related_name="teaching_assignments"
+        on_delete=models.SET_NULL,
+        related_name="teaching_assignments",
+        null=True,
+        blank=True
     )
 
     subject = models.ForeignKey(
@@ -206,7 +208,7 @@ class TeachingAssignment(models.Model):
 
     classroom = models.ForeignKey(
         ClassRoom,
-        on_delete=models.CASCADE,
+        on_delete=models.CASCADE, 
         related_name="teaching_assignments"
     )
 
