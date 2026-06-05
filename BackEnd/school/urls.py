@@ -6,6 +6,8 @@ urlpatterns = [
     # Define your URL patterns here  
     
     path('register-new-school/', SchoolAndDirectorCreateView.as_view(), name='create-school'), #tested done 
+    path('school-detail/director/<uuid:school_id>/', DirectorSchoolDetailView.as_view(), name='school-detail-director'), #Tested
+    
     path('userlogs/<uuid:school_id>/', AllUserLogsView.as_view(), name='userlogs'), #tested done
     
     path('role/create/', SchoolRoleView.as_view(), name='role'),

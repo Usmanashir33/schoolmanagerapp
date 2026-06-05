@@ -7,7 +7,7 @@ from core.emails.email_templates.emails import generate_school_update_email,gene
 from core.formatters import format_serializer_errors
 from core.tasks import send_html_email,send_ordinary_sms
 from core.permissions import DirectorUserPermission 
-from core.serializers import SchoolSerializer 
+from core.serializers import DirectorSchoolSerializer 
 from core.custom_pegination import CustomPagination50
 
 from rest_framework.views import APIView
@@ -57,7 +57,7 @@ class DirectorAcademicSettingsView (APIView) :
             # by checking  directord pin 
             if serializer.is_valid() : 
                 serializer.save()  
-                normalized_data = SchoolSerializer(serializer.instance).data
+                normalized_data = DirectorSchoolSerializer(serializer.instance).data
                  # send the email to director
                 try:    
                     html_content = generate_school_update_email(
@@ -118,7 +118,7 @@ class DirectorAcademicSettingsView (APIView) :
                     html_content=html_content)
             except: 
                 pass
-            return Response({"success":"school delete request submitted successfully",'school': SchoolSerializer(school).data},status=status.HTTP_204_NO_CONTENT)
+            return Response({"success":"school delete request submitted successfully",'school': DirectorSchoolSerializer(school).data},status=status.HTTP_204_NO_CONTENT)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
         

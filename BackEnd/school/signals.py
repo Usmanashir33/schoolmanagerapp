@@ -1,10 +1,16 @@
-from django.db.models.signals import pre_save, post_save
+from django.db.models.signals import pre_save, post_save,post_delete
 from django.dispatch import receiver
 from authUser.models import User
 from django.core.mail import send_mail
 
 from django.core.exceptions import ValidationError
-from .models import ActivityLog, School, SchoolRole,Templates ,FinanceSettings,Term,Session ,SchoolPermission
+from .models import *
+from student.models import *
+from teacher.models import *
+from staff.models import *
+from parent.models import *
+from finance.models import *
+from academics.models import *
 import string
 import random
 from .custom_templates import CUSTOM_TEMPLATE_LIST
@@ -22,6 +28,73 @@ def reset_user_log_caches(sender, instance, created ,**kwargs):
         f"activity_{instance.user.id}_{instance.school.id}_*"
     )
     
+        
+
+@receiver(post_save, sender=School)
+@receiver(post_delete, sender=School)
+
+@receiver(post_save, sender=Student)
+@receiver(post_delete, sender=Student)
+
+@receiver(post_save, sender=Teacher)
+@receiver(post_delete, sender=Teacher)
+
+@receiver(post_save, sender=Staff)
+@receiver(post_delete, sender=Staff)
+
+@receiver(post_save, sender=Parents)
+@receiver(post_delete, sender=Parents)
+
+@receiver(post_save, sender=Subject)
+@receiver(post_delete, sender=Subject)
+
+@receiver(post_save, sender=SchoolSection)
+@receiver(post_delete, sender=SchoolSection)
+
+
+
+@receiver(post_save, sender=SchoolRole)
+@receiver(post_delete, sender=SchoolRole)
+
+@receiver(post_save, sender=SchoolPermission)
+@receiver(post_delete, sender=SchoolPermission)
+
+@receiver(post_save, sender=PromotionLog)
+@receiver(post_delete, sender=PromotionLog)
+
+@receiver(post_save, sender=ActivityLog)
+@receiver(post_delete, sender=ActivityLog)
+
+@receiver(post_save, sender=Templates)
+@receiver(post_delete, sender=Templates)
+
+@receiver(post_save, sender=ClassFeeSetting)
+@receiver(post_delete, sender=ClassFeeSetting)
+
+@receiver(post_save, sender=FinanceSettings)
+@receiver(post_delete, sender=FinanceSettings)
+
+@receiver(post_delete, sender=ClassRoom)
+@receiver(post_save, sender=ClassRoom)
+
+
+@receiver(post_save, sender=TeachingAssignment)
+@receiver(post_delete, sender=TeachingAssignment)
+def clear_dashboard_cache(sender, instance, **kwargs):
+        cache_key = f"school_{instance.school.id}_dashbord"
+        try :
+            cache.delete(cache_key)
+        except :
+            pass
+        
+@receiver(post_save, sender=StudentClassEnrollment)
+@receiver(post_delete, sender=StudentClassEnrollment)
+def clear_dashboard_cache(sender, instance, **kwargs):
+        cache_key = f"school_{instance.student.school.id}_dashbord"
+        try :
+            cache.delete(cache_key)
+        except :
+            pass
         
 @receiver(post_save, sender=School) 
 def create_finance_settings(sender, instance, created ,**kwargs):

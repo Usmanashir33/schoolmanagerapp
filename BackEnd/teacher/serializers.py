@@ -27,17 +27,23 @@ class DisplinaryRecordIDSerializer(serializers.ModelSerializer ) :
         model = DisplinaryRecord
         fields = ['id',]
         
-class TeacherSerializer(serializers.ModelSerializer): 
-    user = MiniUserSerializer(read_only=True)
-    bank_details = BankSerializer(read_only = True )
-    disciplinaryRecords = DisplinaryRecordSerializer(read_only=True,many=True,)
+class TeacherSerializer(serializers.ModelSerializer):  #initial fatch
+    picture = serializers.SerializerMethodField(read_only=True)
+    is_active = serializers.SerializerMethodField(read_only=True)
     
-    class Meta:  
-        model = Teacher 
-        fields ='__all__'
-        read_only_fields = ['id', 'joined_at']
+    def get_picture(self, obj):
+        return obj.picture.url if obj.picture else None
+    
+    def get_is_active(self, obj):
+        return obj.user.is_active
+    class Meta:
+        model = Teacher
+        fields = ['id',"staff_id",'first_name',"last_name",'middle_name','title','picture','is_active','role']
+        read_only_fields = ['id',"staff_id",'first_name',"last_name",'middle_name','email','picture']
+
+ 
         
-class MiniTeacherSerializer(serializers.ModelSerializer):
+class MiniTeacherSerializer(serializers.ModelSerializer): # teachers list 
     picture = serializers.SerializerMethodField(read_only=True)
     is_active = serializers.SerializerMethodField(read_only=True)
     

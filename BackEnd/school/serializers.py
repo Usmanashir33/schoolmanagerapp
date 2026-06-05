@@ -53,13 +53,15 @@ class FinanceSettingsSerializer(serializers.ModelSerializer):
 class TermSerializer(serializers.ModelSerializer) :
     class Meta:  
         model = Term  
-        fields ='__all__'
-        read_only_fields = ['id', 'date_added']
+        fields = "__all__"
+        write_only_fields =['school','date_added','start_date','end_date']
+        read_only_fields = ['id',]
 class SessionSerializer(serializers.ModelSerializer) :
     class Meta:  
         model = Session 
-        fields ='__all__'
-        read_only_fields = ['id', 'date_added'] 
+        fields = "__all__"
+        write_only_fields =['school','date_added','start_date','end_date']
+        read_only_fields = ['id',] 
 class SchoolPermissionSerializer(serializers.ModelSerializer) :
     class Meta:
         model = SchoolPermission

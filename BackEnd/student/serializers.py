@@ -45,16 +45,39 @@ class StudentClassEnrollmentSerializer(serializers.ModelSerializer):
         fields = '__all__'
         # read_only_fields = ['class_room',]
 class StudentSerializer(serializers.ModelSerializer):
-    user = MiniUserSerializer(read_only=True)
-    guardian = ParentsSerializer(read_only=True) 
-    class_rooms = StudentClassEnrollmentSerializer(many=True,read_only=True)
+    active_class_rooms = serializers.SerializerMethodField(read_only=True)
+    picture = serializers.SerializerMethodField(read_only=True)
     active_class_rooms = serializers.SerializerMethodField(read_only=True)
     
+    is_active = serializers.SerializerMethodField(read_only=True)
+    
+    def get_picture(self, obj):
+        return obj.picture.url if obj.picture else None
+    
+    def get_is_active(self, obj):
+        return obj.user.is_active if obj.user else False
+    
+    def get_active_class_rooms(self, obj):
+        return list(
+            StudentClassEnrollment.objects.filter(
+                student=obj,
+                status__in=["active", "enrolled"]
+            ).values_list("class_room_id", flat=True)
+        )
     class Meta:
-        model = Student  
-        fields = '__all__'
-        read_only_fields = ['class_room',] 
+        model = Student
+        fields = ['id',"admission_number",'first_name',"last_name",'joined_at','middle_name','email','picture','is_active','role','active_class_rooms','gender']
+        read_only_fields = ['id',"admission_number",'first_name',"last_name",'middle_name','email','picture']
 
+
+   
+
+class StudentDetailFetchSerializer(serializers.ModelSerializer):
+    class_rooms = MiniClassRoomSerializer(many=True)
+    user = MiniUserSerializer(read_only=True)
+    guardian = ParentsSerializer(read_only=True) 
+    active_class_rooms = serializers.SerializerMethodField(read_only=True)
+    
     def get_active_class_rooms(self, obj):
 
         return list(
@@ -63,17 +86,13 @@ class StudentSerializer(serializers.ModelSerializer):
                 status__in=["active", "enrolled"]
             ).values_list("class_room_id", flat=True)
         )
-
-class StudentDetailFetchSerializer(serializers.ModelSerializer):
-    class_room = MiniClassRoomSerializer(many=True)
-    user = MiniUserSerializer(read_only=True)
     class Meta:
         model = Student
         fields = '__all__'
         extra_kwargs = {
         "class_room": {"required": False,}
     }
-class MiniStudentSerializer(serializers.ModelSerializer):
+class MiniStudentSerializer(serializers.ModelSerializer) :
     picture = serializers.SerializerMethodField(read_only=True)
     is_active = serializers.SerializerMethodField(read_only=True)
     
@@ -81,17 +100,19 @@ class MiniStudentSerializer(serializers.ModelSerializer):
         return obj.picture.url if obj.picture else None
     
     def get_is_active(self, obj):
-        return obj.user.is_active
+        return obj.user.is_active if obj.user else False
     class Meta:
         model = Student
-        fields = ['id',"admission_number",'first_name',"last_name",'middle_name','email','picture','is_active']
+        fields = ['id',"admission_number",'first_name',"last_name",'middle_name','email','picture','is_active','gender']
         read_only_fields = ['id',"admission_number",'first_name',"last_name",'middle_name','email','picture']
 class StudentDetailSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)
     picture = serializers.SerializerMethodField()
     guardian = ParentsSerializer(read_only=True)
+    class_rooms = StudentClassEnrollmentSerializer(  many=True, read_only=True)
     active_class_rooms = serializers.SerializerMethodField()
-    class_rooms = StudentClassEnrollmentSerializer(  many=True,  read_only=True)
+    is_active = serializers.SerializerMethodField(read_only=True)
+    
     class Meta:
         model = Student
         fields = "__all__"
@@ -102,6 +123,9 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             for enrollment in obj.class_rooms.all()
             if enrollment.status in ['active', 'enrolled']
         ]
+        
+    def get_is_active(self, obj):
+        return obj.user.is_active if obj.user else False
 
     def get_picture(self, obj):
         return obj.picture.url if obj.picture else None
@@ -124,6 +148,8 @@ class StudentCreateSerializer(serializers.ModelSerializer):
         return obj.picture.url if obj.picture else None 
 
     def create(self, validated_data):
+        start = timezone.now()
+        
         request = self.context['request']
         class_room_ids = request.data.getlist("class_rooms")
         guardian_data = request.data.get("guardian", None)
@@ -139,7 +165,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             student = Student.objects.create(**validated_data)
 
-            # ✅ FIX: picture must be saved 
+            # ✅ FIX: picture must be saved  
             if picture_file:
                 student.picture = picture_file
                 student.save()
@@ -147,17 +173,21 @@ class StudentCreateSerializer(serializers.ModelSerializer):
             if class_room_ids is not None :
                 class_rooms = ClassRoom.objects.filter(id__in=class_room_ids).all()
                 # loop through the  classes and created enrollment records  -
-                for class_room in class_rooms:
-                    StudentClassEnrollment.objects.create(
-                        student=student,
-                        class_room=class_room
+                StudentClassEnrollment.objects.bulk_create(
+                    (
+                        StudentClassEnrollment(
+                            student=student,
+                            class_room=class_room)
                     )
+                    for class_room in class_rooms
+                )
             g_email = guardian_data.get('email','invalid') 
             g_full_name = guardian_data.get('full_name','invalid') 
             
             if guardian_data is not None and len(g_email)>8 and len(g_full_name)> 5 :
                 parent = Parents.objects.filter(
-                    Q(user__email__iexact = g_email.lower()) & Q(school=student.school) ).first()
+                    Q(user__email__iexact = g_email.lower()) & Q(school=student.school)
+                ).first()
                 # if parent exit we just link it to the student if not we create new parent and link it to the student
                 if not parent :
                     checking_user = User.objects.filter(email__iexact=g_email.lower()).first()
@@ -211,9 +241,8 @@ class StudentCreateSerializer(serializers.ModelSerializer):
                         student=instance,
                         class_room=class_room
                     )
-                    if not created and cls.status == 'withdrawn' :
+                    if not created and not cls.status in ['active','enrolled'] :
                         cls.status = 'enrolled'
-                        # cls.date_left = None
                         cls.date_joined = timezone.now()
                         cls.save()
                         
@@ -240,8 +269,11 @@ class StudentCreateSerializer(serializers.ModelSerializer):
                 ]
 
                 for field in allowed_fields:
-                    if field in guardian_data:
-                        setattr(parent, field, guardian_data[field])
+                    if guardian_data.get(field):
+                        setattr(parent, field, guardian_data.get(field))
+                parent.relation_ship = guardian_data.get('relation_ship')
+                parent.phone = guardian_data.get('phone')
+                parent.save()
                 instance.guardian = parent
 
             instance.save()

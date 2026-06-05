@@ -1,14 +1,14 @@
 from rest_framework import serializers
 
 from director.models import Director
-from core .serializers import SchoolSerializer
+from core .serializers import DirectorSchoolSerializer
 from authUser.serializers import MiniUserSerializer
 import  json
 from django.db import transaction
 class DirectorDetailSerializer(serializers.ModelSerializer):
     picture = serializers.SerializerMethodField()
     user = MiniUserSerializer(read_only=True)
-    directorschools = SchoolSerializer(many=True, read_only=True)
+    directorschools = DirectorSchoolSerializer(many=True, read_only=True)
     class Meta:  
         model = Director 
         fields ='__all__'

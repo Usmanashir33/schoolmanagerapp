@@ -16,12 +16,34 @@ class ActivityRoleSerializer(serializers.ModelSerializer):
         model = ActivityRole
         fields = '__all__' 
 
-class MiniStaffSerializer(serializers.ModelSerializer):  # for web sockets 
-    user = MiniUserSerializer(read_only=True)
+class StaffSerializer(serializers.ModelSerializer):  # for initial data 
+    picture = serializers.SerializerMethodField(read_only=True)
+    is_active = serializers.SerializerMethodField(read_only=True)
+    
+    def get_picture(self, obj):
+        return obj.picture.url if obj.picture else None
+    
+    def get_is_active(self, obj):
+        return obj.user.is_active
     class Meta:
         model = Staff
-        fields = '__all__' 
-        read_only_fields = ['id',]
+        fields = ['id',"staff_id",'first_name',"last_name",'middle_name','title','picture','is_active','role']
+        read_only_fields = ['id',"staff_id",'first_name',"last_name",'middle_name','email','picture']
+class MiniStaffSerializer(serializers.ModelSerializer):  # for web sockets 
+    picture = serializers.SerializerMethodField(read_only=True)
+    is_active = serializers.SerializerMethodField(read_only=True)
+    
+    def get_picture(self, obj):
+        return obj.picture.url if obj.picture else None
+    
+    def get_is_active(self, obj):
+        return obj.user.is_active
+    class Meta:
+        model = Staff
+        fields = ['id',"staff_id",'first_name',"last_name",'middle_name','title','picture','is_active',]
+        read_only_fields = ['id',"staff_id",'first_name',"last_name",'middle_name','email','picture']
+
+ 
         
 class StaffDetailSerializer(serializers.ModelSerializer):
     picture        = serializers.SerializerMethodField()

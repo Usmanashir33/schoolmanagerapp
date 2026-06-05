@@ -2,8 +2,7 @@ from rest_framework import serializers
 
 from school.models import School,SchoolDeleteRequest
 from school.serializers import TermSerializer, SessionSerializer
-from academics.models import SchoolSection,Subject,ClassRoom
-from academics.serializers import MiniClassRoomSerializer
+from academics.serializers import MiniClassRoomSerializer,MiniSchoolSectionSerializer,SubjectSerializer
 from student.models import Student,StudentClassEnrollment
 from teacher.models import Teacher
 from director.models import Director
@@ -18,40 +17,20 @@ class BankSerializer(serializers.ModelSerializer) :
         fields ='__all__'
         read_only_fields = ['id', 'created_at']
         
-class SchoolSectionSerializer(serializers.ModelSerializer):
-    classrooms = MiniClassRoomSerializer(many=True, read_only=True)
-    classesCount = serializers.SerializerMethodField(read_only = True)
-    def get_classesCount(self,obj):
-        return obj.classrooms.count()
-    
-    studentsCount = serializers.SerializerMethodField(read_only = True)
-    teachersCount = serializers.SerializerMethodField(read_only = True)
-    
-    def get_studentsCount(self, obj):
-        return StudentClassEnrollment.objects.filter(
-            class_room__section=obj,
-            status__in=["active", "enrolled"]
-        ).count()
-
-    def get_teachersCount(self, obj):
-        return Teacher.objects.filter(
-            subjects__teaching_assignments__classroom__section=obj
-        ).distinct().count()
-    
-    class Meta:  
-        model = SchoolSection 
-        fields ='__all__'
-        read_only_fields = ['id', 'joined_at'] 
+ 
 class SchoolDeleteRequestSerialzer(serializers.ModelSerializer):
-    classrooms = MiniClassRoomSerializer(many=True, read_only=True)
+    # classrooms = MiniClassRoomSerializer(many=True, read_only=True)
     class Meta:  
         model = SchoolDeleteRequest
         fields ='__all__'
         read_only_fields = ['id', 'requested_at']  
 
-class SchoolSerializer(serializers.ModelSerializer):
+class DirectorSchoolSerializer(serializers.ModelSerializer):
     logo = serializers.SerializerMethodField(read_only =True)
-    sections = SchoolSectionSerializer(many=True, read_only=True) # sections full and classroom full data
+    sections = MiniSchoolSectionSerializer(many=True, read_only=True) # sections full 
+    classrooms =   MiniClassRoomSerializer(many=True, read_only =  True) # classroom full data
+    subjects = SubjectSerializer(many=True, read_only =  True)
+    
     terms = TermSerializer(read_only=True,many=True)
     sessions = SessionSerializer(read_only=True,many=True)
     delete_requests = SchoolDeleteRequestSerialzer(read_only = True)
@@ -59,35 +38,47 @@ class SchoolSerializer(serializers.ModelSerializer):
     total_teachers = serializers.SerializerMethodField(read_only = True)
     total_students = serializers.SerializerMethodField(read_only = True)
     total_staffs = serializers.SerializerMethodField(read_only = True)
+    
     total_classrooms = serializers.SerializerMethodField(read_only = True)
-    total_parents = serializers.SerializerMethodField(read_only = True) 
     total_sections = serializers.SerializerMethodField(read_only = True)
+    total_subjects = serializers.SerializerMethodField(read_only = True)
     class Meta:  
         model = School
         fields ='__all__'
         read_only_fields = ['id', 'joined_at','ref_id','director']
-        
+    
+    def get_total_teachers(self,obj) :
+        all = {"count":obj.teachers.count(),
+            "active":obj.teachers.filter(user__is_active = True).count(),
+            "inactive":obj.teachers.filter(user__is_active = False).count()
+            }
+        return all
+    
+    def get_total_students(self,obj) :
+        all = {"count":obj.students.count(),
+            "active":obj.students.filter(user__is_active = True).count(),
+            "inactive":obj.students.exclude(user__is_active = True).count() # because student can exist with out user
+            }
+        return all 
+    
+    def get_total_staffs(self,obj) :
+        all = {"count":obj.staffs.count(),
+            "active":obj.staffs.filter(user__is_active = True).count(),
+            "inactive":obj.staffs.filter(user__is_active = False).count()
+            }
+        return all
+    
+    def get_total_classrooms(self,obj) :
+        return obj.classrooms.count()
+    
+    def get_total_sections(self,obj) :
+        return obj.sections.count()
+    
+    def get_total_subjects(self,obj) :
+        return obj.subjects.count()
+    
     def get_logo(self, obj):
         return obj.logo.url if obj.logo else None
-    
-    def get_total_teachers(self, obj):
-        return obj.teachers.all().count()
-    
-    def get_total_students(self, obj):
-        return obj.students.all().count()
-    
-    def get_total_staffs(self, obj):
-        return obj.staffs.all().count()  
-    
-    def get_total_parents(self, obj):
-        return obj.parents.all().count()
-    
-    def get_total_sections(self, obj):
-        return obj.sections.all().count()
-    
-    def get_total_classrooms(self, obj):
-        total_classrooms = ClassRoom.objects.filter(section__school__id=obj.id).count()
-        return total_classrooms
     
     def update(self, instance, validated_data):
         request = self.context['request']
@@ -112,7 +103,7 @@ class SchoolSerializer(serializers.ModelSerializer):
 class DirectorSerializer(serializers.ModelSerializer): 
     picture = serializers.SerializerMethodField()
     user = MiniUserSerializer(read_only=True)
-    directorschools = SchoolSerializer(many=True, read_only=True)
+    directorschools = DirectorSchoolSerializer(many=True, read_only=True)
     def get_picture(self, obj):
 
         return obj.picture.url if obj.picture else None
@@ -124,7 +115,7 @@ class DirectorSerializer(serializers.ModelSerializer):
 # --------- Teacher Role  ------------------  
 class TeacherSerializer(serializers.ModelSerializer): 
     user = MiniUserSerializer(read_only=True)
-    school = SchoolSerializer()
+    # school = SchoolSerializer()
     class Meta:  
         model = Teacher 
         fields ='__all__'
@@ -132,7 +123,7 @@ class TeacherSerializer(serializers.ModelSerializer):
     
 
 class StaffSerializer(serializers.ModelSerializer):
-    school = SchoolSerializer()
+    # school = SchoolSerializer()
     user = MiniUserSerializer(read_only=True)
     class Meta:
         model = Staff
@@ -141,7 +132,7 @@ class StaffSerializer(serializers.ModelSerializer):
         
         
 class StudentSerializer(serializers.ModelSerializer):
-    school = SchoolSerializer()
+    # school = SchoolSerializer()
     user = MiniUserSerializer(read_only=True)
     class Meta:
         model = Student
@@ -149,7 +140,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
 class ParentsSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)
-    schools = SchoolSerializer(many=True, read_only=True)
+    # schools = SchoolSerializer(many=True, read_only=True)
     students = StudentSerializer(read_only=True)
     class Meta:
         model = Parents

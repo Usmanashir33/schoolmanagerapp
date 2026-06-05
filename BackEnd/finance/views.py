@@ -5,7 +5,7 @@ from core.tasks import send_html_email,send_ordinary_sms
 
 from core.formatters import format_serializer_errors
 from core.permissions import DirectorUserPermission
-from core.serializers import SchoolSerializer , DirectorSerializer
+from core.serializers import DirectorSchoolSerializer , DirectorSerializer
 from rest_framework.exceptions import ValidationError
 from core.utils.otp_generators import generate_5_otp
 from core.websocketutils import signal_sender

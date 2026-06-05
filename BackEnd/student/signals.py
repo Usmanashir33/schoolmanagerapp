@@ -4,9 +4,10 @@ from django.dispatch import receiver
 from authUser.models import User
 from django.core.mail import send_mail
 from django.core.cache import cache
+from parent.models  import Parents
 
 from django.core.exceptions import ValidationError
-from .models import Student
+from .models import Student,StudentClassEnrollment
 import string
 import random
 
@@ -91,6 +92,34 @@ def update_user_when_student_updated(sender, instance, created, **kwargs) :
 @receiver(post_save, sender=Student)
 @receiver(post_delete, sender=Student)
 def clear_student_cache(sender, instance, **kwargs):
-    cache.delete_pattern(
-        f"students_{instance.school.id}_*"
-    )
+    try :
+        cache.delete_pattern(
+            f"students_{instance.school.id}_*"
+        )
+        cache.delete(f"student_detail_{instance.school.id}_{instance.id}")
+    except :
+        pass
+    
+@receiver(post_save, sender=User)
+@receiver(post_delete, sender=User)
+@receiver(post_save, sender=Parents)
+@receiver(post_delete, sender=Parents)
+def clear_student_cache(sender, instance, **kwargs):
+    try :
+        cache.delete_pattern(
+            f"students_{instance.school.id}_*"
+        )
+        cache.delete(f"student_detail_{instance.school.id}_{instance.student.id}")
+    except :
+        pass
+    
+@receiver(post_save, sender=StudentClassEnrollment)
+@receiver(post_delete, sender=StudentClassEnrollment)
+def clear_student_cache(sender, instance, **kwargs):
+    try :
+        cache.delete_pattern(
+            f"students_{instance.school.id}_*"
+        )
+        cache.delete(f"student_detail_{instance.student.school.id}_{instance.student.id}")
+    except :
+        pass

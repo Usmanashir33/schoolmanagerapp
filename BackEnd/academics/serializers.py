@@ -27,6 +27,29 @@ class MiniClassRoomSerializer(serializers.ModelSerializer) :
         model = ClassRoom
         fields ='__all__'
         read_only_fields = ['id', 'form_teacher','name',]
+class MiniSchoolSectionSerializer(serializers.ModelSerializer) :
+    classesCount = serializers.SerializerMethodField(read_only = True)
+    studentsCount = serializers.SerializerMethodField(read_only = True)
+    teachersCount = serializers.SerializerMethodField(read_only = True)
+    
+    def get_classesCount(self,obj):
+        return obj.classrooms.count()
+    
+    def get_studentsCount(self, obj):
+        return StudentClassEnrollment.objects.filter(
+            class_room__section__id=obj.id,
+            status__in=["active", "enrolled"]
+        ).count()
+
+    def get_teachersCount(self, obj):
+        return Teacher.objects.filter(
+            subjects__teaching_assignments__classroom__section__id=obj.id
+        ).distinct().count()
+    
+    class Meta:  
+        model = SchoolSection 
+        fields ='__all__'
+        read_only_fields = ['id', 'joined_at']
 
 #------------------------------------------------------------------------------------
 #                                    SECTION SERIALIZERS

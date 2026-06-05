@@ -18,7 +18,6 @@ from .models import Student
 from school.models import ActivityLog, School
 from authUser.models import User
 from school.serializers import ActivityLogSerializer
-from django.core.cache import cache
 from django.utils import timezone
 
 
@@ -32,8 +31,6 @@ class AllStudentsView(APIView):
     def get(self, request, school_id):
         try:
              # validate director actions
-            #  calculate starting minutes to measure speed improvenment 
-            start= timezone.now()
             valid_school = School.objects.filter(id=school_id).first()
 
             if not valid_school:
@@ -43,11 +40,12 @@ class AllStudentsView(APIView):
                 )
             page = request.query_params.get("page", 1)
             cache_key = f"students_{school_id}_page_{page}"
-            cached_response = cache.get(cache_key)
-            if cached_response :
-                end = timezone.now()
-                # print(f"Cache hit for {cache_key}: {end - start}")
-                return Response(cached_response, status=status.HTTP_200_OK)
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
 
             students = (
                 Student.objects
@@ -79,7 +77,10 @@ class AllStudentsView(APIView):
                 "success": "School students", 
                 "paginated_data": serializer
             })
-            cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+            try :
+                cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+            except:
+                pass
             end = timezone.now()
             # print(f"Cache miss for {cache_key}: {end - start}")
             return Response(resp, status=status.HTTP_200_OK)
@@ -123,9 +124,12 @@ class ClassCurrentStudentsListView(APIView):
         try:
              # find catched data before querying the database
             cache_key = f"students_{school_id}_{class_id}"
-            cached_response = cache.get(cache_key)
-            if cached_response :
-                return Response(cached_response, status=status.HTTP_200_OK)
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
             
             class_students  = Student.objects.filter(school__id = school_id).filter(
                 class_rooms__class_room__id = class_id,
@@ -151,18 +155,36 @@ class StudentDetailView(APIView):
         SchoolPermissions.CAN_ADD_STUDENTS,
     ]
     
-    # ---------------- GET STUDENT -----------------
+    # ---------------- GET STUDENT DETAILS-----------------
     def get(self, request,school_id,student_id):  
         try: 
             # validate director actions 
-            valid_student  = Student.objects.filter(id = student_id,school_id=school_id).first()  #.exists()
+            cache_key = f"student_detail_{school_id}_{student_id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            valid_student  = Student.objects.filter(id = student_id,school__id=school_id).select_related(
+                "user"
+                ).prefetch_related(
+                    "guardian",
+                    "class_rooms"
+                ).first()  #.exists()
             if not valid_student:
                 return Response({"error": "Student not found"}, status=status.HTTP_200_OK)
             serializer = StudentDetailSerializer(valid_student)
-            return Response({
+            resp = {
                     "success": "Student details",
-                    "student": serializer.data
-            }, status=status.HTTP_200_OK)
+                    "student_details": serializer.data
+            }
+            
+            try :
+                cache.set(cache_key,resp,timeout=60*3)
+            except:
+                pass
+            return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK )
             
@@ -172,6 +194,7 @@ class StudentDetailView(APIView):
             school_id = request.data.get("school") 
             email = request.data.get("email",'unknown')
             phone = request.data.get("phone",'unknown')
+            
             
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
@@ -199,10 +222,12 @@ class StudentDetailView(APIView):
             serializer = StudentCreateSerializer(data=request.data,context={"request":request}) 
             if serializer.is_valid():
                 serializer.save() 
+                data = StudentSerializer(serializer.instance).data
                 return Response({
                     "success": "Student created successfully",
-                    "new_student": serializer.data
+                    "new_student": data
                 }, status=status.HTTP_200_OK)
+            
             return Response({"error": format_serializer_errors(serializer.errors) }, status=status.HTTP_200_OK)
 
         except Exception as e :
@@ -216,14 +241,19 @@ class StudentDetailView(APIView):
             
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-             # validate director actions 
             valid_school = School.objects.filter(id=school_id).exists() #.exists()
             if not valid_school:
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
 
             student = Student.objects.filter(
                 id=student_id, school_id=school_id
-            ).first()
+            ).select_related(
+                "user"
+                ).prefetch_related(
+                    "guardian",
+                    "class_rooms" ,
+                    "school__users"
+                ).first()  
             if not student:
                 return Response({"error": "Student not found"}, status=status.HTTP_200_OK)
             
@@ -251,7 +281,6 @@ class StudentDetailView(APIView):
             return Response({"error": str(e) }, status=status.HTTP_200_OK)
 
 class StudentAdministrationView(APIView):
-    # parser_classes = [MultiPartParser, FormParser]
     permission_classes = [HasSchoolPermission]
     required_permissions = [
         SchoolPermissions.STUDENTS_MANAGEMENT,
@@ -264,7 +293,6 @@ class StudentAdministrationView(APIView):
             
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-             # validate director actions 
             valid_school = School.objects.filter(id=school_id).first() #.exists()
             if not valid_school:
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
@@ -276,7 +304,6 @@ class StudentAdministrationView(APIView):
 
             if not student:
                 return Response({"error": "Student not found "}, status=status.HTTP_200_OK)
-            serializer = StudentSerializer(student)
             # ---------------- DELETE STUDENT -----------------
             if request_action == "delete":
                 student.delete()
@@ -284,10 +311,10 @@ class StudentAdministrationView(APIView):
                 # configuring activity log data 
                 new_log = ActivityLog.objects.create(
                     school = valid_school,
-                    user=request.user,
+                    user=request.user, 
                     action="DELETE",
                     module="STUDENT",
-                    description=f"Student deleted: {student.admission_number} - {student.full_name()}"
+                    description=f"Student deleted: {student.admission_number}•{student.full_name()}"
                 )
                 user_room = f"room{request.user.id}"
                 log_data = ActivityLogSerializer(new_log).data
@@ -301,12 +328,15 @@ class StudentAdministrationView(APIView):
                     pass
                 return Response({
                     "success": f"Student {request_action} successfully",
-                    "del_student": serializer.data
+                    "del_student": {"id":student_id}
                 }, status=status.HTTP_200_OK)
                 
             # ---------------- SUSPEND / ACTIVATE  STUDENT -----------------
             if request_action == "suspend":
                 user = student.user
+                if not user :
+                    return Response({"error": "student-user not found, update users Email"}, status=status.HTTP_200_OK)
+ 
                 user.is_active = not user.is_active
                 user.save()
                 request_action = "Activated" if user.is_active else "Suspended" 
@@ -317,7 +347,7 @@ class StudentAdministrationView(APIView):
                     user=request.user,
                     action="UPDATE",
                     module="STUDENT",
-                    description=f"Student updated to ({request_action}) : {student.admission_number} - {student.full_name()}"
+                    description=f"Student ({request_action}) : {student.admission_number}•{student.full_name()}"
                 )
                 user_room = f"room{request.user.id}"
                 log_data = ActivityLogSerializer(new_log).data
@@ -331,8 +361,8 @@ class StudentAdministrationView(APIView):
                     pass
 
                 return Response({
-                    "success": f"Student {request_action} successfully",
-                    "sus_student": serializer.data
+                    "success": f"Student {request_action}",
+                    "sus_student": {"id":student_id,"is_active":user.is_active}
                 }, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": str(e)}, status=status.HTTP_200_OK)
