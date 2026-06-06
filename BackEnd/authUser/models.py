@@ -81,7 +81,7 @@ class User(AbstractUser):
         return  f"{str(self.id)[:6]}..."
     
     def full_name(self):
-        return f"{self.full_name} {self.last_name} {self.middle_name}"
+        return f"{self.first_name} {self.last_name} {self.middle_name}"
     
     def has_permission(self, permission_names: list[str]) -> bool:
         role = self.school_role

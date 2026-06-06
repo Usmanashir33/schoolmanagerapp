@@ -1,4 +1,4 @@
-from functools import cache
+from django.core.cache import cache
 
 from django.db.models.signals import pre_save, post_save ,post_delete
 from django.dispatch import receiver
@@ -6,8 +6,8 @@ from authUser.models import User
 from django.core.mail import send_mail
 
 from django.core.exceptions import ValidationError
-from .models import Teacher 
-from school.models import School,SchoolPermission, SchoolRole
+from .models import Teacher ,DisplinaryRecord
+from academics.models import TeachingAssignment
 import string
 import random
 
@@ -84,3 +84,16 @@ def clear_teacher_cache(sender, instance, **kwargs):
     cache.delete_pattern(
         f"teachers_{instance.school.id}_*"
     )
+    cache.delete(f"teacher_{instance.id}")
+    
+    
+@receiver(post_save, sender=DisplinaryRecord)
+@receiver(post_delete, sender=DisplinaryRecord)
+    
+@receiver(post_save, sender=TeachingAssignment)
+@receiver(post_delete, sender=TeachingAssignment)
+def clear_teacher_cache(sender, instance, **kwargs):
+    cache.delete_pattern(
+        f"teachers_{instance.teacher.school.id}_*"
+    )
+    cache.delete(f"teacher_{instance.teacher.id}")

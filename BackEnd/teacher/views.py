@@ -9,7 +9,8 @@ from school.tasks import SchoolServices
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser,FormParser
+from rest_framework.parsers import MultiPartParser , FormParser
+
 from teacher.serializers import MiniTeacherSerializer, TeacherSerializer ,TeacherDetailSerializer,DisplinaryRecordSerializer,TeacherCreateSerializer
 from teacher.models import Teacher 
 
@@ -17,26 +18,21 @@ from core.custom_pegination import CustomPagination15
 from school.models import School
 from school.permissions import HasSchoolPermission, SchoolPermissions
 from authUser.models import User 
-from teacher.models import DisplinaryRecord
 from django.core.cache import cache
 from django.utils import timezone
 from school.models import ActivityLog
 from school.serializers import ActivityLogSerializer
 
-
-
 #==================================================================================================            
 #                                       TEACHER SECTION                           
 #==================================================================================================
-class AllTeachersView(APIView): #paginated request
+class AllTeachersView(APIView) : #paginated request
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_VIEW_TEACHERS]
 
     def get(self, request, school_id):
         try:
              # validate director actions
-            #  calculate starting minutes to measure speed improvenment 
-            start= timezone.now()
             valid_school = School.objects.filter(id=school_id).first()
 
             if not valid_school:
@@ -46,11 +42,12 @@ class AllTeachersView(APIView): #paginated request
                 )
             page = request.query_params.get("page", 1)
             cache_key = f"teachers_{school_id}_page_{page}"
-            cached_response = cache.get(cache_key)
-            if cached_response:
-                end = timezone.now()
-                # print(f"Cache hit for {cache_key}: {end - start}")
-                return Response(cached_response, status=status.HTTP_200_OK)
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response:
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
 
             teachers = (
                 Teacher.objects
@@ -80,9 +77,10 @@ class AllTeachersView(APIView): #paginated request
                 "success": "School teachers", 
                 "paginated_data": serializer
             })
-            cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
-            end = timezone.now()
-            # print(f"Cache miss for {cache_key}: {end - start}")
+            try :
+                cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+            except :
+                pass
             return Response(resp, status=status.HTTP_200_OK)
 
         except Exception as e :
@@ -99,9 +97,12 @@ class ClassCurrentTeachersListView(APIView):
         try:
              # find catched data before querying the database
             cache_key = f"teachers_{school_id}_{class_id}"
-            cached_response = cache.get(cache_key)
-            if cached_response :
-                return Response(cached_response, status=status.HTTP_200_OK)
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
             
             class_students  = Teacher.objects.filter(school__id = school_id).filter(
                 teaching_assignments__classroom__id = class_id,
@@ -112,7 +113,10 @@ class ClassCurrentTeachersListView(APIView):
                     "success": "All class teachers",
                     "classTeachers": serializer.data
             }
-            cache.set(cache_key, resp, timeout=60*3)  # Cache for 3 minutes
+            try :
+                cache.set(cache_key, resp, timeout=60*3)  # Cache for 3 minutes
+            except :
+                pass
             return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
@@ -145,26 +149,41 @@ class FilterTeacherDetailView(APIView):
             }, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
-class TeacherCreateView(APIView):
+class TeacherView(APIView):
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_MANAGE_TEACHERS]
     # ---------------- GET Teacher -----------------
     def get(self, request,school_id,teacher_id) :  
         try:
-            valid_teacher  = Teacher.objects.filter(id = teacher_id, school__id=school_id).first()  #.exists()
+            cache_key = f"teacher_{teacher_id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            valid_teacher  = Teacher.objects.filter(id = teacher_id, school__id=school_id).select_related(
+                'user','bank_details'    
+            ).prefetch_related(
+                "disciplinaryRecords",'teaching_assignments','form_classes'    
+            ).first()  #.exists()
             if not valid_teacher:
                 return Response({"error": "Teacher not found"}, status=status.HTTP_200_OK)
-            serializer = TeacherDetailSerializer(valid_teacher)
-            return Response({
+            serializer = TeacherDetailSerializer(valid_teacher) 
+            resp = {
                     "success": "teacher details",
-                    "teacher": serializer.data
-            }, status=status.HTTP_200_OK)
+                    "teacher_details": serializer.data
+            }
+            try :
+                cache.set(cache_key,resp,timeout=60*3)
+            except :
+                pass
+            return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
             
     def post(self, request):   ## add new teacher 
         try:
-            # director = request.user.director
             pin = request.data.get( "pin" )
             school_id = request.data.get("school")
             
@@ -183,7 +202,7 @@ class TeacherCreateView(APIView):
             if  email== 'invalid' or  phone== 'invalid':
                 return Response({"error": "Invalid email or phone number "}, status=status.HTTP_200_OK)
             
-            existed_student = User.objects.filter(
+            existed = User.objects.filter(
                 Q(email__iexact = email) | 
                 Q(phone_number__iexact=phone)
                 ).values(
@@ -191,11 +210,11 @@ class TeacherCreateView(APIView):
                     "phone_number"
                 ).first()
 
-            if existed_student:
-                if existed_student.get("email", "not provided").lower() == email.lower():
+            if existed:
+                if existed.get("email", "not provided").lower() == email.lower():
                     return Response({"error": "teacher email is already used!"},status=status.HTTP_200_OK)
                 
-                if existed_student.get("phone_number", "not provided ").lower() == phone.lower():
+                if existed.get("phone_number", "not provided ").lower() == phone.lower():
                     return Response({"error": "teacher phone number is already used!"},status=status.HTTP_200_OK)
 
 
@@ -204,7 +223,7 @@ class TeacherCreateView(APIView):
                 serializer.save() 
                 return Response({
                     "success": "Teacher created successfully",
-                    "new_teacher": serializer.data
+                    "new_teacher": TeacherSerializer(serializer.instance).data
                 }, status=status.HTTP_200_OK)
             return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
         except Exception as e :
@@ -218,17 +237,18 @@ class TeacherCreateView(APIView):
             
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-             # validate director actions 
-             # validate director actions 
             valid_school = School.objects.filter(id=school_id).first()
             if not valid_school:
                 return Response({"error": "Invalid Entry"}, status=status.HTTP_200_OK)
             
-            teacher = Teacher.objects.filter(
-                id=teacher_id, school__id=school_id
+            teacher  = Teacher.objects.filter(id = teacher_id, school__id=school_id).select_related(
+                'user','bank_details'    
+            ).prefetch_related(
+                "disciplinaryRecords",'teaching_assignments','form_classes'    
             ).first()
             if not teacher:
                 return Response({"error": "Teacher not found"}, status=status.HTTP_200_OK)
+            
             # authenticate new teacher 
             email = request.data.get('email','invalid')
             phone = request.data.get('phone','invalid')
@@ -255,6 +275,24 @@ class TeacherCreateView(APIView):
             serializer = TeacherCreateSerializer(teacher, data=request.data, partial=True,context = {"request":request})
             if serializer.is_valid():
                 serializer.save()
+                # configuring activity log data 
+                new_log = ActivityLog.objects.create(
+                    school = valid_school,
+                    user=request.user,
+                    action="UPDATE",
+                    module="TEACHER",
+                    description=f"{teacher.staff_id} - {teacher.full_name()}"
+                )
+                user_room = f"room{request.user.id}"
+                log_data = ActivityLogSerializer(new_log).data
+                data = {
+                    "type": "send_response1",
+                    "activity_log": log_data,
+                    }
+                try:
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                except :
+                    pass
                 return Response({
                     "success": "teacher updated successfully",
                     "updated_teacher": serializer.data
@@ -262,7 +300,7 @@ class TeacherCreateView(APIView):
             return Response({"error": serializer.errors}, status=status.HTTP_200_OK)
         except:
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
-class DirectorTeacherRecordView(APIView):
+class TeacherRecordView(APIView):
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_MANAGE_TEACHERS]
     
@@ -314,12 +352,14 @@ class DirectorTeacherRecordView(APIView):
              # validate director actions 
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-            valid_school = School.objects.filter(id=school_id)  #.exists()
-            if not valid_school:
-                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
+            teacher = Teacher.objects.filter(id=school_id,school__id = school_id).prefetch_related(
+                "disciplinaryRecords"
+            ).first()
+            if not teacher :
+                return Response({"error": "Invalid  Entry"}, status=status.HTTP_200_OK)
 
             # ----------------  Upate Report TEACHER -----------------
-            record = DisplinaryRecord.objects.filter(id=record_id,teacher=teacher_id)
+            record = teacher.disciplinaryRecords.filter(id=record_id).first()
             if not record :
                 return Response({"error": "Record not found "}, status=status.HTTP_200_OK)
             serializer = DisplinaryRecordSerializer(record,data=request.data,partial=True)
@@ -366,7 +406,7 @@ class TeacherAdministrationView(APIView):
                     user=request.user,
                     action="DELETE",
                     module="TEACHER",
-                    description=f"Teacher deleted: {teacher.staff_id} - {teacher.full_name()}"
+                    description=f"{teacher.staff_id} - {teacher.full_name()}"
                 )
                 user_room = f"room{request.user.id}"
                 log_data = ActivityLogSerializer(new_log).data
@@ -384,7 +424,6 @@ class TeacherAdministrationView(APIView):
                 }, status=status.HTTP_200_OK)
                 
             # ---------------- SUSPEND / ACTIVATE  STUDENT -----------------
-            serializer = TeacherDetailSerializer(teacher)
             if request_action == "suspend":
                 user = teacher.user
                 user.is_active = not user.is_active
@@ -397,7 +436,7 @@ class TeacherAdministrationView(APIView):
                     user=request.user,
                     action="UPDATE",
                     module="TEACHER",
-                    description=f"Teacher: {request_action}. {teacher.staff_id} - {teacher.full_name()}"
+                    description=f"{request_action}. {teacher.staff_id} - {teacher.full_name()}"
                 )
                 user_room = f"room{request.user.id}"
                 log_data = ActivityLogSerializer(new_log).data
@@ -412,7 +451,7 @@ class TeacherAdministrationView(APIView):
 
                 return Response({
                     "success": f"Teacher {request_action} successfully",
-                    "sus_teacher": serializer.data
+                    "sus_teacher": {"id":teacher_id,'is_active':user.is_active}
                 }, status=status.HTTP_200_OK)
         except:
             return Response({"error": "server error"}, status=status.HTTP_200_OK)

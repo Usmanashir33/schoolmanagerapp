@@ -45,7 +45,6 @@ class StudentClassEnrollmentSerializer(serializers.ModelSerializer):
         fields = '__all__'
         # read_only_fields = ['class_room',]
 class StudentSerializer(serializers.ModelSerializer):
-    active_class_rooms = serializers.SerializerMethodField(read_only=True)
     picture = serializers.SerializerMethodField(read_only=True)
     active_class_rooms = serializers.SerializerMethodField(read_only=True)
     
