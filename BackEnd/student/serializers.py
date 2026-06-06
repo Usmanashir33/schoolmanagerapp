@@ -134,6 +134,12 @@ class StudentCreateSerializer(serializers.ModelSerializer):
     guardian = ParentsSerializer( read_only=True )
     active_class_rooms = serializers.SerializerMethodField(read_only=True)
     class_rooms = StudentClassEnrollmentSerializer( many=True, read_only=True)
+    is_active = serializers.SerializerMethodField(read_only=True)
+    
+    def get_is_active(self, obj):
+        return obj.user.is_active if obj.user else False
+
+    
     class Meta:
         model = Student
         fields = '__all__'

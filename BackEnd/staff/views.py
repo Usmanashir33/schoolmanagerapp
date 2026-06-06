@@ -19,7 +19,7 @@ from core.tasks import send_html_email
 from school.models import School 
 from school.permissions import HasSchoolPermission, SchoolPermissions
 from school.tasks import SchoolServices
-from staff.serializers import StaffDetailSerializer,StaffCreateUpdateSerializer
+from staff.serializers import StaffDetailSerializer,StaffCreateUpdateSerializer,StaffSerializer
 from staff.models import Staff
 
 from core.custom_pegination import CustomPagination15
@@ -44,16 +44,15 @@ class AllStaffsView(APIView): #paginated request
             # get all staffs of the school
             page = request.query_params.get("page", 1)
             cache_key = f"staffs_{school_id}_page_{page}"
-            cached_response = cache.get(cache_key)
-            
-            if cached_response:
-                end = timezone.now()
-                return Response(cached_response, status=status.HTTP_200_OK)
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response:
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
     
             staffs  = Staff.objects.filter(school_id = school_id).select_related(
-                'school',
                 'user',
-                'bank_details',
                 'activity_role'
             ).order_by("joined_at")
             
@@ -64,7 +63,7 @@ class AllStaffsView(APIView): #paginated request
                 request
             )
 
-            serializer = StaffDetailSerializer(
+            serializer = StaffSerializer(
                 paginated_students,
                 many=True
             ).data
@@ -73,9 +72,10 @@ class AllStaffsView(APIView): #paginated request
                 "success": "School staffs", 
                 "paginated_data": serializer
             })
-            cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
-            end = timezone.now()
-            # print(f"Cache miss for {cache_key}: {end - start}")
+            try :
+                cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+            except :
+                pass
             return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
@@ -90,11 +90,11 @@ class FilterStaffView(APIView):
                 Q(first_name__icontains = searchQuery) |  Q(title__icontains = searchQuery) |
                 Q(last_name__icontains = searchQuery)  | Q(middle_name__icontains = searchQuery) | Q(email__icontains = searchQuery) |
                 Q(phone__icontains = searchQuery) | Q(staff_id__icontains = searchQuery)
-            ).filter(school_id = school_id).select_related('school','user','bank_details', 'activity_role')[:5]
+            ).filter(school_id = school_id).select_related('user','activity_role')[:5]
             
             if not searched:
                 return Response({"success": "not found"}, status=status.HTTP_200_OK)
-            serializer = StaffDetailSerializer(searched,many=True)
+            serializer = StaffSerializer(searched,many=True)
             return Response({
                     "success": "searchResults",
                     "results": serializer.data
@@ -109,15 +109,28 @@ class StaffCreateUpdateView(APIView):
     # ---------------- GET Staff -----------------
     def get(self, request ,school_id,staff_id):  
         try:
-             # validate director actions 
-            valid_staff  = Staff.objects.filter(id = staff_id, school_id=school_id).first()  #.exists()
+            cache_key = f"staff_{staff_id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            valid_staff  = Staff.objects.filter(id = staff_id, school_id=school_id).select_related(
+                "user",'activity_role'
+            ).first()  
             if not valid_staff:
                 return Response({"error": "staff not found"}, status=status.HTTP_200_OK)
             serializer = StaffDetailSerializer(valid_staff)
-            return Response({
+            resp = {
                     "success": "staff details",
-                    "staff": serializer.data
-            }, status=status.HTTP_200_OK)
+                    "staff_details": serializer.data
+            }
+            try :
+                cache.set(cache_key,resp,timeout=60*3)
+            except :
+                pass
+            return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
             
@@ -156,7 +169,7 @@ class StaffCreateUpdateView(APIView):
                 
                 return Response({
                     "success": "staff created successfully",
-                    "new_staff": serializer.data
+                    "new_staff": StaffSerializer(serializer.instance).data
                 }, status=status.HTTP_200_OK)
             return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
         except Exception as e :
@@ -231,7 +244,6 @@ class StaffAdministrationView(APIView):
 
             if not staff:
                 return Response({"error": "Staff not found "}, status=status.HTTP_200_OK)
-            serializer = StaffDetailSerializer(staff)
             # ---------------- DELETE STAFF -----------------
             if request_action == "delete":
                 staff.delete()
@@ -241,7 +253,7 @@ class StaffAdministrationView(APIView):
                     user=request.user,
                     action="DELETE",
                     module="STAFF",
-                    description=f"Staff deleted: {staff.staff_id} - {staff.full_name()}"
+                    description=f"{staff.staff_id} - {staff.full_name()}"
                 )
                 user_room = f"room{request.user.id}"
                 log_data = ActivityLogSerializer(new_log).data
@@ -284,7 +296,7 @@ class StaffAdministrationView(APIView):
                     pass
                 return Response({
                     "success": f"Staff {request_action} successfully",
-                    "sus_staff": serializer.data
+                    "sus_staff": {"id":staff_id,"is_active" :user.is_active}
                 }, status=status.HTTP_200_OK)
         except:
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
@@ -329,7 +341,7 @@ class StaffRoleManagementView(APIView):
                     user=request.user,
                     action="UPDATE",
                     module="STAFF",
-                    description=f"Staff {request_action}:{staff.staff_id} - {staff.full_name()}"
+                    description=f"{request_action}:{staff.staff_id} - {staff.full_name()}"
                 )
                 user_room = f"room{request.user.id}"
                 log_data = ActivityLogSerializer(new_log).data

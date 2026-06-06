@@ -61,6 +61,7 @@ class Staff(models.Model) :
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="staffs", blank=True, null=True)
     role = models.CharField(max_length=100, blank=True,default='Staff') 
     activity_role = models.ForeignKey(ActivityRole, on_delete=models.SET_NULL, related_name="roles", blank=True, null=True)
+    
     address = models.TextField(blank=True)
     staff_id = models.CharField(max_length=120, unique=True,blank=True,null=True,editable=False)
     nin = models.CharField(max_length=50,blank=True)     

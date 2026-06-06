@@ -195,7 +195,6 @@ class StudentDetailView(APIView):
             email = request.data.get("email",'unknown')
             phone = request.data.get("phone",'unknown')
             
-            
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             

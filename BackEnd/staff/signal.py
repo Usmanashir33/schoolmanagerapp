@@ -20,12 +20,25 @@ def generate_random_password(length=8):
 @receiver(post_save, sender=Staff)
 @receiver(post_delete, sender=Staff)
 def clear_staff_cache(sender, instance, **kwargs):
-    cache.delete_pattern(
-        f"staffs_{instance.school.id}_*"
-    )
+    try : 
+        cache.delete_pattern(
+            f"staffs_{instance.school.id}_*"
+        )
+        cache.delete(f"staff_{instance.id}")
+    except :
+        pass
+    
+@receiver(post_save, sender=User)
+@receiver(post_delete, sender=User)
+def clear_staff_cache(sender, instance, **kwargs):
+    try :
+        cache.delete(f"staff_{instance.staff.id}")
+    except :
+        pass
+    
 
 @receiver(pre_save, sender=Staff)
-def create_teacher_user(sender, instance, **kwargs):
+def create_staff_user(sender, instance, **kwargs):
     if not instance.user_id:
         # check if email is unique
         email = instance.email

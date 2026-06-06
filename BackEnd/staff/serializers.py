@@ -18,16 +18,23 @@ class ActivityRoleSerializer(serializers.ModelSerializer):
 
 class StaffSerializer(serializers.ModelSerializer):  # for initial data 
     picture = serializers.SerializerMethodField(read_only=True)
+    activity_role = serializers.SerializerMethodField(read_only=True)
+    school_role = serializers.SerializerMethodField(read_only=True)
     is_active = serializers.SerializerMethodField(read_only=True)
+    def get_is_active(self, obj):
+        return obj.user.is_active if obj.user else None
     
     def get_picture(self, obj):
         return obj.picture.url if obj.picture else None
     
-    def get_is_active(self, obj):
-        return obj.user.is_active
+    def get_school_role(self, obj) :
+        return obj.user.school_role.id  if obj.user.school_role else None
+    
+    def get_activity_role(self, obj):
+        return {"id":obj.activity_role.id,'role':obj.activity_role.role} if obj.activity_role else None 
     class Meta:
         model = Staff
-        fields = ['id',"staff_id",'first_name',"last_name",'middle_name','title','picture','is_active','role']
+        fields = ['id',"staff_id",'first_name',"last_name",'middle_name','gender','title','picture','is_active','role','phone','email','activity_role','school_role']
         read_only_fields = ['id',"staff_id",'first_name',"last_name",'middle_name','email','picture']
 class MiniStaffSerializer(serializers.ModelSerializer):  # for web sockets 
     picture = serializers.SerializerMethodField(read_only=True)
@@ -47,20 +54,27 @@ class MiniStaffSerializer(serializers.ModelSerializer):  # for web sockets
         
 class StaffDetailSerializer(serializers.ModelSerializer):
     picture        = serializers.SerializerMethodField()
-    user           = MiniUserSerializer(read_only=True)
     bank_details   = BankSerializer(read_only=True)
     activity_role  = ActivityRoleSerializer(read_only=True)
+    school_role = serializers.SerializerMethodField(read_only=True)
+    is_active = serializers.SerializerMethodField(read_only=True)
+    
+    def get_picture(self, obj):
+        return obj.picture.url if obj.picture else None
+    
+    def get_is_active(self, obj):
+        return obj.user.is_active if obj.user else None
+    
+    def get_school_role(self, obj) :
+        return obj.user.school_role.id  if obj.user.school_role else None
+    
     class Meta:
         model = Staff
         fields = '__all__'
-        
-    def get_picture(self, obj):
-        if obj.picture:
-            return obj.picture.url
-        return None
+    
 class StaffCreateUpdateSerializer(serializers.ModelSerializer):
     picture        = serializers.SerializerMethodField()
-    user           = MiniUserSerializer(read_only=True)
+    # user           = MiniUserSerializer(read_only=True)
     bank_details   = BankSerializer(read_only=True)
     activity_role  = ActivityRoleSerializer(read_only=True)
     class Meta:
