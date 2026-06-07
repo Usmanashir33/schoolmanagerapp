@@ -175,7 +175,7 @@ class RetriveOrGenOTPView(APIView) :
 class LoginRequestView(APIView):
     permission_classes =[permissions.AllowAny]
     def post(self, request, *args, **kwargs):
-        # try :
+        try :
             username_field = request.data.get('username_field',None)
             password = request.data.get('password',None)
             otp = request.data.get('otp',None)
@@ -290,8 +290,8 @@ class LoginRequestView(APIView):
                     },status=status.HTTP_200_OK) 
             else :
                return Response({'error':'login failed!'},status=status.HTTP_200_OK)
-        # except :
-            # return Response({"error":"server went wrong"})
+        except :
+            return Response({"error":"server went wrong"})
 class SearchUserView(APIView):
     def post(self, request):
         try:

@@ -187,8 +187,8 @@ class TeacherView(APIView):
             pin = request.data.get( "pin" )
             school_id = request.data.get("school")
             
-            if not request.user.pins.checkPin(pin) :
-                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            # if not request.user.pins.checkPin(pin) :
+            #     return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             
              # validate director actions 
             valid_school = School.objects.filter(id=school_id).first()

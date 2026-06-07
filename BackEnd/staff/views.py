@@ -141,8 +141,8 @@ class StaffCreateUpdateView(APIView):
             email = request.data.get( "email" )
             phone = request.data.get( "phone" )
 
-            if not request.user.pins.checkPin(pin) :
-                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            # if not request.user.pins.checkPin(pin) :
+            #     return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             
             valid_school = School.objects.filter(id=school_id).first()  
             if not valid_school:

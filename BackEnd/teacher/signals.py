@@ -81,19 +81,28 @@ def update_user_when_student_updated(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Teacher)
 @receiver(post_delete, sender=Teacher)
 def clear_teacher_cache(sender, instance, **kwargs):
-    cache.delete_pattern(
-        f"teachers_{instance.school.id}_*"
-    )
-    cache.delete(f"teacher_{instance.id}")
+    try :
+        cache.delete_pattern(
+            f"teachers_{instance.school.id}_*"
+        )
+        cache.delete(f"teacher_{instance.id}")
+    except :
+        pass
     
     
 @receiver(post_save, sender=DisplinaryRecord)
 @receiver(post_delete, sender=DisplinaryRecord)
+
+@receiver(post_save, sender=User)
+@receiver(post_delete, sender=User)
     
 @receiver(post_save, sender=TeachingAssignment)
 @receiver(post_delete, sender=TeachingAssignment)
 def clear_teacher_cache(sender, instance, **kwargs):
-    cache.delete_pattern(
-        f"teachers_{instance.teacher.school.id}_*"
-    )
-    cache.delete(f"teacher_{instance.teacher.id}")
+    try :
+        cache.delete_pattern(
+            f"teachers_{instance.teacher.school.id}_*"
+        )
+        cache.delete(f"teacher_{instance.teacher.id}")
+    except:
+        pass

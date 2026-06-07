@@ -106,6 +106,7 @@ def clear_student_cache(sender, instance, **kwargs):
 @receiver(post_delete, sender=Parents)
 def clear_student_cache(sender, instance, **kwargs):
     try :
+        
         cache.delete_pattern(
             f"students_{instance.school.id}_*"
         )

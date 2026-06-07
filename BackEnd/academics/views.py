@@ -17,7 +17,6 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
 
 from student.models import Student, StudentClassEnrollment
-from student.serializers import StudentDetailSerializer
 
 from school.models import School,ActivityLog
 from school.models import School,Session
@@ -599,15 +598,18 @@ class AcademicDetailsView(APIView):
     def get(self, request,school_id,academic_item,item_id):   ## add new academic data
         try:
            
-            valid_school = School.objects.filter( id=school_id).prefetch_related('sections', 'sections__classrooms','subjects').first()
+            valid_school = School.objects.filter( id=school_id).prefetch_related('sections', 'sections__classrooms','subjects__teaching_assignments').first()
             if not valid_school:
                 return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
             
             # find catched data before querying the database
             cache_key = f"academics_{school_id}_{academic_item}_{item_id}"
-            cached_response = cache.get(cache_key)
-            if cached_response :
-                return Response(cached_response, status=status.HTTP_200_OK)
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
             
             #---------------------------SECTION -------------------
             if academic_item == "sections":
@@ -619,13 +621,15 @@ class AcademicDetailsView(APIView):
                     "success": "Section",
                     "section_details": serializer.data
                 }
-                cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+                try :
+                    cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+                except :
+                    pass
                 
                 return Response(resp, status=status.HTTP_200_OK)
                     
             #--------------------------- CLASSROOM -------------------
             if academic_item == "classrooms" :
-                
                 classroom = ClassRoom.objects.filter(id=item_id,section__school__id = school_id).prefetch_related(
                     'student_enrollments__student','teaching_assignments'
                 ).select_related(
@@ -650,7 +654,10 @@ class AcademicDetailsView(APIView):
                     "success": "Classroom",
                     "classroom_details": serializer 
                 }
-                cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+                try :
+                    cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+                except :
+                    pass
                 
                 return Response(resp, status=status.HTTP_200_OK)
             
@@ -664,7 +671,10 @@ class AcademicDetailsView(APIView):
                     "success": "Subject",
                     "subject_details": serializer.data
                 }
-                cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+                try :
+                    cache.set(cache_key,resp,timeout=60*5) # Cache for 5 minutes)
+                except :
+                    pass
                 
                 return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
@@ -679,9 +689,9 @@ class AcademicView(APIView):
             pin = request.data.get( "pin" )
             school_id = request.data.get( "school" )
             
-             #--------------- validate director actions -------------------
-            if not request.user.pins.checkPin(pin) :
-                return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            # if not request.user.pins.checkPin(pin) :
+            #     return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
+            
             valid_school = School.objects.filter( id=school_id).prefetch_related('sections', 'subjects').first()
             if not valid_school:
                 return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
@@ -699,7 +709,7 @@ class AcademicView(APIView):
                     serializer.save()
                     return Response({
                     "success": "Section created successfully",
-                    "new_section": serializer.data
+                    "new_section": MiniSchoolSectionSerializer(serializer.instance).data
                 }, status=status.HTTP_200_OK)
                 return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
                     
@@ -738,7 +748,7 @@ class AcademicView(APIView):
                     serializer.save()
                     return Response({
                     "success": "Subject added successfully",
-                    "new_subject": serializer.data
+                    "new_subject": SubjectSerializer(serializer.instance).data
                 }, status=status.HTTP_200_OK)
                 return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
         except Exception as e :
@@ -863,7 +873,6 @@ class AcademicView(APIView):
 
     def delete(self, request,school_id,academic_item,item_id,pin):   ## DELETE 
         try:
-            
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             valid_school = School.objects.filter( id=school_id).prefetch_related('sections','subjects').first()
@@ -886,7 +895,7 @@ class AcademicView(APIView):
                         user=request.user,
                         action="DELETE",
                         module="SECTION",
-                        description=f"Section {'deleted'}:{item_id}-{section.name}"
+                        description=f"{item_id}-{section.name}"
                     )
                     user_room = f"room{request.user.id}"
                     log_data = ActivityLogSerializer(new_log).data
@@ -917,7 +926,7 @@ class AcademicView(APIView):
                         user=request.user,
                         action="DELETE",
                         module="CLASSROOM",
-                        description=f"Classroom {'deleted'}:{item_id}-{classroom.name}"
+                        description=f"{item_id}-{classroom.name}"
                     )
                 user_room = f"room{request.user.id}"
                 log_data = ActivityLogSerializer(new_log).data
@@ -952,7 +961,7 @@ class AcademicView(APIView):
                         user=request.user,
                         action="DELETE",
                         module="SUBJECT",
-                        description=f"Subject {'deleted'}:{item_id}-{subject.name}"
+                        description=f"{item_id}-{subject.name}"
                     )
                 user_room = f"room{request.user.id}"
                 log_data = ActivityLogSerializer(new_log).data

@@ -16,13 +16,13 @@ class MiniClassRoomSerializer(serializers.ModelSerializer) :
     
     subjectsCount = serializers.SerializerMethodField(read_only = True)
     def get_subjectsCount(self,obj): 
-        return obj.teaching_assignments.all().count()
+        return obj.teaching_assignments.all().count() if obj.teaching_assignments else 0
 
     def get_studentsCount(self,obj):
-        return obj.student_enrollments.filter(status__in=["active",'enrolled']).count()
+        return obj.student_enrollments.filter(status__in=["active",'enrolled']).count() if obj.student_enrollments else None
     
     def get_teachersCount(self,obj):
-        return obj.teaching_assignments.count()
+        return obj.teaching_assignments.count() if obj.teaching_assignments else 0
     class Meta:  
         model = ClassRoom
         fields ='__all__'
@@ -33,7 +33,7 @@ class MiniSchoolSectionSerializer(serializers.ModelSerializer) :
     teachersCount = serializers.SerializerMethodField(read_only = True)
     
     def get_classesCount(self,obj):
-        return obj.classrooms.count()
+        return obj.classrooms.count() if obj.classrooms else 0
     
     def get_studentsCount(self, obj):
         return StudentClassEnrollment.objects.filter(
@@ -58,6 +58,10 @@ class SchoolSectionCreateUpdateSerializer(serializers.ModelSerializer):
     classesCount = serializers.SerializerMethodField(read_only = True)
     studentsCount = serializers.SerializerMethodField(read_only = True)
     teachersCount = serializers.SerializerMethodField(read_only = True)
+    classrooms = MiniClassRoomSerializer(read_only = True,many=True)
+    
+    def get_classesCount(self,obj):
+        return obj.classrooms.count() if obj.classrooms else 0
     
     def get_studentsCount(self, obj):
         return StudentClassEnrollment.objects.filter(
@@ -67,37 +71,46 @@ class SchoolSectionCreateUpdateSerializer(serializers.ModelSerializer):
 
     def get_teachersCount(self, obj):
         return Teacher.objects.filter(
-            subjects__class_rooms__section=obj
+            subjects__teaching_assignments__classroom__section__id=obj.id
         ).distinct().count()
-        
-    def get_teachersCount(self,obj):
-        teachers = Teacher.objects.filter(
-            subjects__class_rooms__section=obj
-        ).distinct()
-        return teachers.count()
-
     class Meta:  
         model = SchoolSection 
         fields ='__all__'
         read_only_fields = ['id', 'joined_at']
         
 class SchoolSectionDetailSerializer(serializers.ModelSerializer):
-    students = serializers.SerializerMethodField(read_only = True)
-    teachers = serializers.SerializerMethodField(read_only = True)
+    classesCount = serializers.SerializerMethodField(read_only = True)
+    studentsCount = serializers.SerializerMethodField(read_only = True)
+    teachersCount = serializers.SerializerMethodField(read_only = True)
     
-    def get_students(self,obj):
-        students = StudentClassEnrollment.objects.filter(
+    classrooms = MiniClassRoomSerializer(read_only = True,many=True)
+    
+    def get_classesCount(self,obj):
+        return obj.classrooms.count() if obj.classrooms else 0
+    
+    def get_studentsCount(self, obj):
+        return StudentClassEnrollment.objects.filter(
             class_room__section=obj,
             status__in=["active", "enrolled"]
-        )[:15]
-        return MiniStudentSerializer(students,many=True).data
-    
-    def get_teachers(self, obj):
-        teachers = Teacher.objects.filter(
-            subjects__teaching_assignments__classroom__section=obj
-        ).distinct()[:15]
-        return MiniTeacherSerializer(teachers,many=True).data
+        ).count()
 
+    def get_teachersCount(self, obj):
+        return Teacher.objects.filter(
+            subjects__teaching_assignments__classroom__section__id=obj.id
+        ).distinct().count()
+    
+        
+    # def get_classrooms(self, obj):
+    #     return obj.classrooms.values("id",'name',"form_teacher__full_name").distinct()
+        
+    # students = serializers.SerializerMethodField(read_only = True)
+    # def get_students(self,obj):
+    #     students = StudentClassEnrollment.objects.filter(
+    #         class_room__section=obj,
+    #         status__in=["active", "enrolled"]
+    #     )[:15]
+    #     return MiniStudentSerializer(students,many=True).data
+    
     class Meta:  
         model = SchoolSection 
         fields ='__all__'
@@ -117,7 +130,7 @@ class ClassRoomDetailSerializer(serializers.ModelSerializer) :
     teachersCount = serializers.IntegerField(read_only=True)
     
     def get_subjects(self,obj): 
-        ass = obj.teaching_assignments.all()
+        ass = obj.teaching_assignments.all() if obj.teaching_assignments else []
         # return subjects.values('subject_id',)
         return [{
             'id':s.subject.id,
@@ -180,44 +193,73 @@ from django.db import transaction
 
     
 class SubjectSerializer(serializers.ModelSerializer) :
-    teachers= serializers.SerializerMethodField(read_only = True)
-    classes = serializers.SerializerMethodField(read_only = True)
-    def get_classes(self,obj) :
-        classes_map = obj.teaching_assignments.values_list('classroom__id', flat=True).distinct()
+    teachersCount= serializers.SerializerMethodField(read_only = True)
+    classesCount = serializers.SerializerMethodField(read_only = True)
+    
+    def get_classesCount(self,obj) :
+        classes_map = len(obj.teaching_assignments.values_list('classroom__id', flat=True).distinct())
         return classes_map
-    def get_teachers(self,obj) :
-        teachers_map = obj.teachers.values('id', "first_name", "last_name","title",'staff_id')
-        return teachers_map
+    
+    def get_teachersCount(self,obj) : 
+        teachers = len(obj.teaching_assignments.values_list('teacher__id', flat=True).distinct())
+        return teachers
+    
     class Meta:  
         model = Subject   
         fields ='__all__' 
         read_only_fields = ['id', 'added_at']
     
 class SubjectDetailSerializer(serializers.ModelSerializer) :
+    teachersCount= serializers.SerializerMethodField(read_only = True)
+    classesCount = serializers.SerializerMethodField(read_only = True)
     teachers= serializers.SerializerMethodField(read_only = True)
-    classes = serializers.SerializerMethodField(read_only = True)
-    def get_classes(self,obj) :
+    class_rooms = serializers.SerializerMethodField(read_only = True)
+    
+    def get_class_rooms(self,obj) :
         classes_map = obj.teaching_assignments.values_list('classroom__id', flat=True).distinct()
         return classes_map
     
-    def get_teachers(self,obj) : 
-        teachers = obj.teachers
-        return MiniTeacherSerializer(teachers ,many=True).data
+    def get_teachers(self,obj) :
+        teachers_map = obj.teaching_assignments.values(
+            'teacher__id', "teacher__first_name", "teacher__last_name","teacher__title",'teacher__staff_id'
+        ).distinct()
+        return teachers_map
+    
+    def get_classesCount(self,obj) :
+        classes_map = len(obj.teaching_assignments.values_list('classroom__id', flat=True).distinct())
+        return classes_map
+    
+    def get_teachersCount(self,obj) : 
+        teachers = len(obj.teaching_assignments.values_list("teacher__id").distinct())
+        return teachers
     class Meta:  
         model = Subject 
         fields ='__all__' 
         read_only_fields = ['id', 'added_at','class_rooms','teachers']
         
 class SubjectCreateUpdateSerializer(serializers.ModelSerializer) :
+    teachersCount= serializers.SerializerMethodField(read_only = True)
+    classesCount = serializers.SerializerMethodField(read_only = True)
     teachers= serializers.SerializerMethodField(read_only = True)
-    classes = serializers.SerializerMethodField(read_only = True)
-    def get_classes(self,obj) :
+    class_rooms = serializers.SerializerMethodField(read_only = True)
+    
+    def get_class_rooms(self,obj) :
         classes_map = obj.teaching_assignments.values_list('classroom__id', flat=True).distinct()
         return classes_map
     
     def get_teachers(self,obj) :
-        teachers_map = obj.teachers.values('id', "first_name", "last_name","title",'staff_id')
+        teachers_map = obj.teaching_assignments.values(
+            'teacher__id', "teacher__first_name", "teacher__last_name","teacher__title",'teacher__staff_id'
+        ).distinct()
         return teachers_map
+    
+    def get_classesCount(self,obj) :
+        classes_map = len(obj.teaching_assignments.values_list('classroom__id', flat=True).distinct())
+        return classes_map
+    
+    def get_teachersCount(self,obj) : 
+        teachers = len(obj.teaching_assignments.values_list("teacher__id").distinct())
+        return teachers
     class Meta:  
         model = Subject 
         fields ='__all__' 
