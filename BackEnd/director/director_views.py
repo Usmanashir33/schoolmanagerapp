@@ -110,48 +110,53 @@ class DirectorSettingsView(APIView) :
     parser_classes =[MultiPartParser,FormParser]
     permission_classes=[
         permissions.IsAuthenticated,
-        DirectorUserPermission,
+        # DirectorUserPermission,
     ]
     
     def put(self, request, school_id) :
         try:
-            # print('request: ', request.data)
             # ============= required fields ==============
+            user = request.user
             pin_set = True if request.data.get('requirePin') == 'true' else False
             otp_required = True if request.data.get('twoFactor')  == 'true' else False
+            login_alerts = True if request.data.get('loginAlerts')  == 'true' else False
+            session_timeout = request.data.get('sessionTimeout')
             
-            director = request.user.director
+
+            
             # validate director actions 
             pin = request.data.get('pin')
             if not request.user.pins.checkPin(pin) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            school = School.objects.filter(id=school_id).first()  #.exists()
             if not school: 
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
             
-            serializer = DirectorSerializer(director, data = request.data, partial=True,context = {"request":request})
-            # by checking  directord pin 
-            if serializer.is_valid() : 
-                # make the update logic here 
-                director.user.pin_set = pin_set
-                director.user.otp_required = otp_required
-                director.user.save()
-                serializer.save()
-                 # send the email to director
-                try:    
-                    html_content = generate_school_update_email(
-                        school.director.full_name , 
-                        school.name, 
-                    )
-                    send_html_email.delay(
-                        subject="School Account Updated" ,
-                        to_email=[school.director.email,school.email] , 
-                        html_content=html_content
-                    )
-                except Exception :
+            user.pin_set = pin_set
+            user.otp_required = otp_required
+            user.login_alerts = login_alerts
+            user.session_timeout = session_timeout
+            user.save()
+            # send the 
+            try:    
+                html_content = generate_school_update_email(
+                    user.full_name() , 
+                    school.name, 
+                )
+                send_html_email.delay(
+                    subject="School Account Updated" ,
+                    to_email=[user.email] , 
+                    html_content=html_content
+                )
+            except Exception :
                     pass 
-                return Response({"success":"user settings  updated successfully", "updated_user": serializer.data}, status=status.HTTP_200_OK)
-            return Response({'error': 'Updated data meybe not available change'}, status=status.HTTP_200_OK)
+            data ={
+                "requirePin":user.pin_set,
+                "twoFactor":user.otp_required,
+                "sessionTimeout":user.session_timeout,
+                "loginAlerts":user.login_alerts,
+            }
+            return Response({"success":"user settings  updated successfully", "updated_user":data}, status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
   

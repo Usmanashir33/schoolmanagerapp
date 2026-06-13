@@ -80,22 +80,6 @@ class DirectorSchoolSerializer(serializers.ModelSerializer):
     def get_logo(self, obj):
         return obj.logo.url if obj.logo else None
     
-    def update(self, instance, validated_data):
-        request = self.context['request']
-        logo = request.FILES.get("logo")
-        
-
-        # update only provided fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-            
-        if logo :
-            instance.logo = logo
-
-        # save updated instance
-        instance.save()
-
-        return instance
         
     
     

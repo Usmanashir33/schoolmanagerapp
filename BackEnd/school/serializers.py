@@ -15,6 +15,33 @@ class TemplatesSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from django.db import transaction
 
+class SchoolSerializer(serializers.ModelSerializer):
+    logo = serializers.SerializerMethodField(read_only =True)
+    class Meta:  
+        model = School
+        fields ='__all__'
+        read_only_fields = ['id', 'joined_at','ref_id','director']
+    
+    def get_logo(self, obj):
+        return obj.logo.url if obj.logo else None
+    
+    def update(self, instance, validated_data):
+        request = self.context['request']
+        logo = request.FILES.get("logo")
+        
+
+        # update only provided fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        if logo :
+            instance.logo = logo
+
+        # save updated instance
+        instance.save()
+
+        return instance
+
 class SchoolBankAccountSerializer(serializers.ModelSerializer):
     finance = serializers.PrimaryKeyRelatedField(read_only=True)
 
@@ -54,19 +81,17 @@ class TermSerializer(serializers.ModelSerializer) :
     class Meta:  
         model = Term  
         fields = "__all__"
-        write_only_fields =['school','date_added','start_date','end_date']
         read_only_fields = ['id',]
 class SessionSerializer(serializers.ModelSerializer) :
     class Meta:  
         model = Session 
         fields = "__all__"
-        write_only_fields =['school','date_added','start_date','end_date']
         read_only_fields = ['id',] 
 class SchoolPermissionSerializer(serializers.ModelSerializer) :
     class Meta:
         model = SchoolPermission
         fields = ['id','school','name','description']
-        read_only_fields = ['id']
+        read_only_fields = ['id','name']
         
     def create(self, validated_data) :
         created = super().create(validated_data)
@@ -136,10 +161,12 @@ class SchoolSettingsSerializer(serializers.ModelSerializer) :
     
     def update(self, instance, validated_data):
         request = self.context['request']
-        school_sesions_names = request.data.getlist("availableSessions")
-        school_terms_names = request.data.getlist("availableTerms")
+        # school_sesions_names = request.data.getlist("availableSessions")
+        # school_terms_names = request.data.getlist("availableTerms")
+        
         current_term_name = request.data.get("term")
         current_session_name = request.data.get("session")
+        
         autoPromotion = request.data.get("autoPromotion")
         lockPastRecords = request.data.get("lockPastRecords")
         gradingSystem  = request.data.get("gradingSystem")
@@ -151,23 +178,23 @@ class SchoolSettingsSerializer(serializers.ModelSerializer) :
             # for attr, value in validated_data.items():
             #     setattr(instance, attr, value)
             
-            if len(school_sesions_names) :
-                for sesion_name in school_sesions_names:
-                    session, created = Session.objects.get_or_create(
-                        name=sesion_name,
-                        school=instance
-                    )
-                    if created:
-                        instance.sessions.add(session)
+            # if len(school_sesions_names) :
+            #     for sesion_name in school_sesions_names:
+            #         session, created = Session.objects.get_or_create(
+            #             name=sesion_name,
+            #             school=instance
+            #         )
+            #         if created:
+            #             instance.sessions.add(session)
                         
-            if len(school_terms_names) :
-                for term_name in school_terms_names :
-                    term,created = Term.objects.get_or_create(
-                        name = term_name,
-                        school = instance
-                    )
-                    if created :
-                        instance.terms.add(term)
+            # if len(school_terms_names) :
+            #     for term_name in school_terms_names :
+            #         term,created = Term.objects.get_or_create(
+            #             name = term_name,
+            #             school = instance
+            #         )
+            #         if created :
+            #             instance.terms.add(term)
                         
             if instance.terms.filter(name = current_term_name).exists() :
                 instance.terms.filter(is_current=True).update(is_current=False)

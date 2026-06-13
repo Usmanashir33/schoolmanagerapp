@@ -12,18 +12,17 @@ from student .models import StudentClassEnrollment ,Student
 from student.serializers import MiniStudentSerializer
 
 class SchoolFeeSerializer(serializers.ModelSerializer):
-    classIds = serializers.SerializerMethodField(read_only=True, source='class_rooms')
-    createdAt = serializers.DateTimeField(format="%a %m/%d/%Y, %I:%M:%S %p", read_only=True, source='created_at')
-    updatedAt = serializers.DateTimeField(format="%a %m/%d/%Y, %I:%M:%S %p", read_only=True, source='updated_at')
+    createdAt = serializers.DateTimeField(format="%a %d/%m/%Y, %I:%M:%S %p", read_only=True, source='created_at')
+    updatedAt = serializers.DateTimeField(format="%a %d/%m/%Y, %I:%M:%S %p", read_only=True, source='updated_at')
 
     class Meta:
         model = ClassFeeSetting
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
-    def get_classIds(self, obj):
-        classes = ClassRoomDetailSerializer(obj.class_rooms.all(), many=True).data
-        return classes if classes else []
+    # def get_classIds(self, obj):
+    #     classes = ClassRoomDetailSerializer(obj.class_rooms.all(), many=True).data
+    #     return classes if classes else []
     
     def create(self, validated_data):
         request = self.context["request"]
@@ -112,6 +111,9 @@ class PaymentInitiationReadSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at','students','ref_number']
         
 class PaymentInitiationSerializer(serializers.ModelSerializer):
+    students = MiniStudentSerializer(read_only = True,many=True)
+    termName = serializers.CharField(source='term.name',read_only = True)
+    sessionName = serializers.CharField(source='session.name',read_only = True)
     class Meta:
         model = PaymentInitiation
         fields = '__all__'
@@ -130,7 +132,6 @@ class PaymentInitiationSerializer(serializers.ModelSerializer):
             school=school
         )
         with transaction.atomic():
-            # print('students: ', students)
             # validation for school existing clases
             if not students.exists():
                 raise serializers.ValidationError({
@@ -196,12 +197,13 @@ class ClassConfiguredSerializer(serializers.ModelSerializer) :
         class_students = Student.objects.filter (
             class_rooms__class_room = obj ,
             class_rooms__status__in  = ["active",'enrolled'],
-        ) 
+        ).prefetch_related('student_fees')
         
         configured_student = class_students.filter(
-            student_fees__transaction_type = 'FEE',
+            student_fees__transaction_type = 'FEE', 
             student_fees__session = session ,
             student_fees__term = term ,
+            student_fees__class_room = obj ,
         )
         configuredAmount = configured_student.values_list("student_fees__total_amount").distinct().first()
         
@@ -238,11 +240,12 @@ class StudentLedgerSerializer(serializers.ModelSerializer) :
         }
         
     
-class DirectorFinanceDashbordSerializer(serializers.ModelSerializer) :
+class StudentsTrxsSerializer(serializers.ModelSerializer) :
     payment_details = serializers.SerializerMethodField(read_only = True)
     name = serializers.SerializerMethodField(read_only = True)
     admission_number = serializers.SerializerMethodField(read_only = True)
     active_classes = serializers.SerializerMethodField(read_only = True)
+    current_net_balance = serializers.ReadOnlyField()
     
     
     class Meta:
@@ -275,7 +278,7 @@ class DirectorFinanceDashbordSerializer(serializers.ModelSerializer) :
         
     def get_active_classes(self,obj):
         active_classes = StudentClassEnrollment.objects.filter( 
-            student = obj.student,
+            student__id = obj.student.id,
             status__in = ["active","enrolled",]
         ).values_list("class_room",flat=True)
         

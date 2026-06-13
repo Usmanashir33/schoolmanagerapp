@@ -49,10 +49,10 @@ TRANSACTION_TYPE = [
         ('PAYMENT', 'Payment'),
     ]
 
-class StudentTransaction(models.Model): # student termly fee for a session and payment also 
+class StudentTransaction(models.Model):  # student termly fee for a session and payment also 
     student = models.ForeignKey(Student, on_delete=models.CASCADE,related_name= "student_fees")
     class_room = models.ForeignKey(ClassRoom, on_delete=models.SET_NULL , related_name='student_fees',
-                                   blank=True, null=True) # not required in payment initiation but required for fee setting and payment allocation
+            blank=True, null=True) # not required in payment initiation but required for fee setting and payment allocation
     
     session = models.ForeignKey(Session , on_delete=models.SET_NULL , related_name='student_fees',
                                    blank=True, null=True)

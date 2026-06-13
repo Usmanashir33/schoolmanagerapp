@@ -1,7 +1,12 @@
 from django.shortcuts import render
+from django.db.models import FloatField
 from core.emails.email_templates.emails import generate_otp_email,generate_login_email,generate_registration_email
 from core.emails.email_templates.emails import generate_school_update_email,generate_school_delete_email
 from core.tasks import send_html_email,send_ordinary_sms
+from school.permissions import HasSchoolPermission,SchoolPermissions
+from django.core.cache import cache
+from core.custom_pegination import CustomPagination15
+
 
 from core.formatters import format_serializer_errors
 from core.permissions import DirectorUserPermission
@@ -27,18 +32,25 @@ from student .models import StudentClassEnrollment ,Student
 from .utils import process_payment
 from .tasks import generate_student_term_fees_task 
 
-from .serializers import SchoolFeeSerializer,ClassConfiguredSerializer,DirectorFinanceDashbordSerializer
+from .serializers import SchoolFeeSerializer,ClassConfiguredSerializer,StudentsTrxsSerializer
 from .serializers import StudentLedgerSerializer ,MiniStudentSerializer,PaymentInitiationSerializer,PaymentInitiationReadSerializer
 
 
 class StudentLedgerView(APIView):
-    def get(self, request,school_id,student_id):   ## add new school fee setting
+    permission_classes=[permissions.IsAuthenticated]
+    def get(self, request,school_id,student_id):  
         try:
              #--------------- validate director actions -------------------
             valid_school = School.objects.filter(id=school_id).first() 
             if not valid_school:
                 return Response({"error": "Invalid School data"}, status=status.HTTP_200_OK)
-             # Start by checking types 
+            cache_key = f"studentLedger_{school_id}_{student_id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
             student = Student.objects.filter(
                 id = student_id ,
                 school = valid_school ,
@@ -53,107 +65,245 @@ class StudentLedgerView(APIView):
             
             student_data = MiniStudentSerializer(student).data
             ledgerEntries = StudentLedgerSerializer(strxs,many=True).data
-            return Response({"success": "student Ledger",'studentLedger':{"student":student_data,'ledgerEntries':ledgerEntries}}, status=status.HTTP_200_OK)
+            resp ={"success": "student Ledger",'studentLedger':{"student":student_data,'ledgerEntries':ledgerEntries}}
+            try:
+                cache.set(cache_key,resp,timeout=5*60)
+            except :
+                pass
+            return Response( resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
 
-class DirectorSearchPaymentView(APIView):
+class SearchPaymentView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_FINANCE]
     def get(self, request,school_id,ref_number):   
         try:
-             #--------------- validate director actions -------------------
-            valid_school = School.objects.filter(id=school_id).first() 
-            if not valid_school:
-                return Response({"error": "Invalid School data"}, status=status.HTTP_200_OK)
+            # valid_school = School.objects.filter(id=school_id).first() 
+            # if not valid_school:
+            #     return Response({"error": "Invalid School data"}, status=status.HTTP_200_OK)
             
             payment = PaymentInitiation.objects.filter(
                 ref_number = ref_number ,
-                school = valid_school ,
+                school__id = school_id ,
             )
             data = PaymentInitiationReadSerializer(payment,many=True).data
             return Response({"success": "match found ",'searchResults':data}, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
         
-class DirectorPendingPaymentsView(APIView):
-    permission_classes = [DirectorUserPermission]
+class PendingPaymentsView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_PAYMENTS]
     def get(self,request,school_id):   
         try:
-            director = request.user.director
-             #--------------- validate director actions -------------------
-            valid_school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            valid_school = School.objects.filter(id=school_id).prefetch_related(
+                "payment_initiations"
+            ).first() 
             if not valid_school:
                 return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
-            
+            cache_key = f"pendingpayments_{school_id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
             # get pending request data here 
-            payments = PaymentInitiation.objects.filter(
-                school = valid_school ,
-            )
-            pendings = payments.filter(status = "PENDING").order_by('-date_initiated')
-            rejected = payments.filter(status = "REJECTED").order_by('-date_resolved')[:100]
-            appoved =  payments.filter(status = "APPROVED").order_by('-date_resolved')[:100]
+            paym = valid_school.payment_initiations.prefetch_related('students').select_related("session",'term')
+            pendings = paym.filter(status = "PENDING").order_by('-date_initiated')
+            rejected = paym.filter(status = "REJECTED").order_by('-date_resolved')[:15]
+            appoved =  paym.filter(status = "APPROVED").order_by('-date_resolved')[:15]
             
             pendingPaymentsList = [*pendings,*rejected,*appoved]
             pendingPayments = PaymentInitiationSerializer(pendingPaymentsList,many=True)
-            return Response({"success": "allPayments", "allPayments":pendingPayments.data}, status=status.HTTP_200_OK)
-        
+            resp ={"success": "allPayments", "allPayments":pendingPayments.data}
+            try :
+                cache.set(cache_key,resp,timeout=5*60)
+            except :
+                pass
+            return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
             
-class DirectorFinanceDashbordView(APIView):
-    permission_classes = [DirectorUserPermission]
-    def get(self, request,school_id,session,term,type):   ## add new school fee setting
-        # try:
-            director = request.user.director
-             #--------------- validate director actions -------------------
-            valid_school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+class FinanceDashbordAllStudentsTrxView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_FINANCE]
+    def get(self, request,school_id,session,term,type):   
+        try:
+            page = request.query_params.get("page", 1)
+            cache_key = f"financedashbordstudenttrxs_{school_id}_{session}_{term}_{type}_{page}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    # pass
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            valid_school = School.objects.filter(id=school_id).prefetch_related(
+                "sessions",'terms'
+                ).first()  
             if not valid_school:
-                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
             
-            session  = Session.objects.filter(id = session,school=valid_school).first()
-            term  = Term.objects.filter(id =term,school = valid_school).first() #.exists()
+            session  = valid_school.sessions.filter(id = session).first()
+            term  = valid_school.terms.filter(id =term).first() 
             if not term or not term :
                 return Response({"error": "Invalid Session/Term"}, status=status.HTTP_200_OK)
             # Start by checking types 
             strxs = StudentTransaction.objects.filter(
-                class_room__section__school = valid_school ,
+                class_room__school__id = school_id ,
                 term = term ,
                 session = session,
+            ).select_related(
+                'student','payment_source'
             )
+            #---------------------------paid-----------------------------------------------
+            total_paid = strxs.filter(status__in  = ['PAID',])
+            tp = total_paid.aggregate(
+                total=Coalesce(Sum('total_amount'), 0, output_field=DecimalField())
+            )
+            paid_count = total_paid.distinct("student_id").count()
+            
+            #---------------------------unpaid-----------------------------------------------
+            total_unpaid = strxs.filter(status__in  = ['UNPAID',])
+            tup=total_unpaid.aggregate(
+                total=Coalesce(Sum('total_amount'), 0, output_field=DecimalField())
+            )
+            unpaid_count = total_unpaid.distinct("student_id").count()
+            
+            #---------------------------partiallypaid-----------------------------------------------
+            total_partial = strxs.filter(status__in  = ['PARTIAL',])
+            tpar =total_partial.aggregate(
+                total=Coalesce(Sum('total_amount'), 0, output_field=DecimalField())
+            )
+            partial_count = total_partial.distinct("student_id").count()
+            
+            # -------------------------------------Display Data---------------------------------------
+            type == type.upper()
+            trxs = strxs.filter(status__in  = [type,]).order_by(
+                    "student_id",
+                    "-created_at"
+                ).distinct("student_id")
+            paginator = CustomPagination15()
 
+            paginated_trxs = paginator.paginate_queryset(
+                trxs,
+                request
+            )
+            data = StudentsTrxsSerializer(paginated_trxs,many = True ).data
+            resp ={
+                    
+                    "total_paid" : tp['total'],
+                    "paid_count":paid_count ,
+                    
+                    "total_unpaid" : tup['total'],
+                    "unpaid_count" :unpaid_count ,
+                    
+                    "total_partial" : tpar['total'],
+                    "partial_count":partial_count ,
+                    
+                    "data" : data,
+            }
+            resp=paginator.get_paginated_response({
+                "success": "students trxs", 
+                "paginated_data": resp
+            })
+            try :
+                cache.set(cache_key,resp,timeout=5*60)
+            except :
+                pass
+            return Response(resp, status=status.HTTP_200_OK)
+        except :
+                return Response({"error": "server failed"}, status=status.HTTP_200_OK)
+class FinanceDashbordView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_FINANCE]
+    def get(self, request,school_id,session,term,type):   
+        try:
+            cache_key = f"financedashbord_{school_id}_{session}_{term}_{type}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+             #--------------- validate director actions -------------------
+            valid_school = School.objects.filter(id=school_id).prefetch_related(
+                "sessions",'terms'
+                ).first()  
+            if not valid_school:
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
+            
+            session  = valid_school.sessions.filter(id = session).first()
+            term  = valid_school.terms.filter(id =term).first() 
+            if not term or not term :
+                return Response({"error": "Invalid Session/Term"}, status=status.HTTP_200_OK)
+            # Start by checking types 
+            strxs = StudentTransaction.objects.filter( 
+                class_room__school__id = school_id ,
+                term = term ,
+                session = session,
+            ).select_related(
+                'student','payment_source'
+            )
+            
             latest_trx_subquery = (
                 StudentTransaction.objects
                 .filter(student=OuterRef("student"))
                 .order_by("-created_at")
             )
+            latest_balance_subquery = (
+                StudentTransaction.objects
+                .filter(student=OuterRef("student"))
+                .order_by("-created_at")
+                .values("net_balance")[:1]
+            )
 
             latest_trxs = StudentTransaction.objects.filter(
                 id=Subquery(latest_trx_subquery.values("id")[:1])
             )
+           
 
             total_net_bal = latest_trxs.aggregate(
                 total_balance=Sum("net_balance")
-            )["total_balance"]
+            )["total_balance"] 
             
+            #---------------------------Paid------------------------------------
             total_paid = strxs.filter(status__in  = ['PAID',])
-            paid_count = total_paid.count()
             tp = total_paid.aggregate(
-                total=Coalesce(Sum('total_amount'), 0, output_field=DecimalField())
+                total=Coalesce(Sum('total_amount'), 0,output_field=DecimalField())
             )
+            paid_count = total_paid.distinct('student_id').count()
             
+            #---------------------------Unpaid------------------------------------
             total_unpaid = strxs.filter(status__in  = ['UNPAID',])
-            unpaid_count = total_unpaid.count()
             tup=total_unpaid.aggregate(
                 total=Coalesce(Sum('total_amount'), 0, output_field=DecimalField())
             )
+            unpaid_count = total_unpaid.distinct('student_id').count()
             
+            #---------------------------Partial Paid------------------------------------
             total_partial = strxs.filter(status__in  = ['PARTIAL',])
-            partial_count = total_partial.count()
             tpar =total_partial.aggregate(
                 total=Coalesce(Sum('total_amount'), 0, output_field=DecimalField())
             )
+            partial_count = total_partial.distinct('student_id').count()
+            
+            #----------------------------------Display Data------------------------
             if type == "PAID" :
-                trxs = strxs.filter(status__in  = ['PAID',])
-                data = DirectorFinanceDashbordSerializer(trxs,many = True ).data
+                trxs = strxs.filter(status__in  = ['PAID',]).select_related(
+                    'payment_source'
+                ).order_by(
+                    "student_id",
+                    "-created_at"
+                ).distinct(
+                    "student_id"
+                ).annotate(
+                    current_net_balance=Subquery(latest_balance_subquery,output_field=FloatField())
+                    
+                )
+                data = StudentsTrxsSerializer(trxs.all()[:15],many = True ).data
                 resp ={
                     "total_net_balance" : total_net_bal ,
                     
@@ -169,11 +319,24 @@ class DirectorFinanceDashbordView(APIView):
                     "data" : data,
                     "type" : type
                 }
+                try :
+                    cache.set(cache_key,{"success": "fully paid students", "dashbordData":resp},timeout=5*60)
+                except :
+                    pass
                 return Response({"success": "fully paid students", "dashbordData":resp}, status=status.HTTP_200_OK)
             
             elif type == "PARTIAL" :
-                trxs = strxs.filter(status__in  = ['PARTIAL',])
-                data = DirectorFinanceDashbordSerializer(trxs,many = True ).data
+                trxs = strxs.filter(status__in  = ['PARTIAL',]).select_related(
+                    'payment_source'
+                ).order_by(
+                    "student_id",
+                    "-created_at"
+                ).distinct(
+                    "student_id"
+                ).annotate(
+                    current_net_balance=Subquery(latest_balance_subquery,output_field=FloatField())
+                )
+                data = StudentsTrxsSerializer(trxs.all()[:15],many = True ).data
                 resp ={
                     "total_net_balance" : total_net_bal ,
                     
@@ -188,11 +351,24 @@ class DirectorFinanceDashbordView(APIView):
                     "data" : data,
                     "type" : type
                 }
+                try :
+                    cache.set(cache_key,{"success": "partially paid students", "dashbordData":resp},timeout=60*5)
+                except :
+                    pass
                 return Response({"success": "partially paid students", "dashbordData":resp}, status=status.HTTP_200_OK)
             
             else :
-                trxs = strxs.filter(status__in  = ['UNPAID',])
-                data = DirectorFinanceDashbordSerializer(trxs,many = True).data
+                trxs = strxs.filter(status__in  = ['UNPAID',]).select_related(
+                    'payment_source'
+                ).order_by(
+                        "student_id",
+                        "-created_at"
+                    ).distinct(
+                        "student_id"
+                    ).annotate(
+                    current_net_balance=Subquery(latest_balance_subquery,output_field=FloatField())
+                )
+                data = StudentsTrxsSerializer(trxs.all()[:15],many = True).data # only 15 if we need much we click view more or search
                 resp ={
                     "total_net_balance" : total_net_bal ,
                     
@@ -207,41 +383,56 @@ class DirectorFinanceDashbordView(APIView):
                     "data" : data,
                     "type" : type
                 }
+                try :
+                    cache.set(cache_key,{"success": "unpaid students", "dashbordData":resp},timeout=5*60)
+                except :
+                    pass
                 return Response({"success": "unpaid students", "dashbordData":resp}, status=status.HTTP_200_OK)
             
-        # except Exception as e :
-            # return Response({"error": "server error"}, status=status.HTTP_200_OK)
-        
-class DirectorFeeStartEngineView(APIView):
-    permission_classes = [DirectorUserPermission]
-    def get(self, request,school_id,session,term):   ## add new school fee setting
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+class FeeStartEngineView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_FINANCE]
+    def get(self, request,school_id,session,term):   ## get school fee setting
         try:
-            director = request.user.director
-             #--------------- validate director actions -------------------
-            valid_school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            cache_key = f"configured_classes_{school_id}_{session}_{term}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    pass
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            valid_school = School.objects.filter(id=school_id).prefetch_related('sessions','terms').first()  #.exists()
             if not valid_school:
-                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
             
-            session  = Session.objects.filter(id = session,school=valid_school).first()
-            term  = Term.objects.filter(id =term,school = valid_school).first() #.exists()
+            session  = valid_school.sessions.filter(id = session).first()
+            term  = valid_school.terms.filter(id =term).first() #.exists()
             
-            if not term or not term :
+            if not term or not session :
                 return Response({"error": "Invalid Session/Term "}, status=status.HTTP_200_OK)
             
             configured_classes = ClassRoom.objects.filter(
-                section__school = valid_school ,
-                student_fees__session = session,
-                student_fees__term = term,
+                school__id = valid_school.id ,
+                student_fees__session__id = session.id,
+                student_fees__term__id = term.id,
                 student_fees__transaction_type = "FEE",
-            ).distinct()
+            ).prefetch_related("student_fees").distinct()
             
             data = ClassConfiguredSerializer(configured_classes ,many=True,context={ "term":term, 'session':session}).data
             # call the fee generator 
-            return Response({"success": "configured classes","configured_classes":data}, status=status.HTTP_200_OK)
+            resp = {"success": "configured classes","configured_classes":data}
+            try :
+                cache.set(cache_key,resp,timeout=3*60)
+            except :
+                pass
+            return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
     
-    def post(self, request):   ## get school configured classes
+    def post(self, request):   ## set school fee for classes students 
         try:
             pin = request.data.get("pin")
             classesIds = request.data.get("classIds")
@@ -250,75 +441,91 @@ class DirectorFeeStartEngineView(APIView):
             session = request.data.get("session")
             term = request.data.get("term")
             
-            director = request.user.director
             #--------------- validate director actions -------------------
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
              #--------------- validate director actions -------------------
-            valid_school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            valid_school = School.objects.filter(id=school_id).prefetch_related(
+                "sessions",'terms','classrooms'
+                ).first()  #.exists()
             if not valid_school:
                 return Response({"error": "Invalid School/Director Entry"}, status=status.HTTP_200_OK)
             
-            session  = Session.objects.filter(id = session,school=valid_school).first()
-            term  = Term.objects.filter(id =term,school = valid_school).first() #.exists()
+            session  = valid_school.sessions.filter(id = session).first()
+            term  = valid_school.terms.filter(id =term).first() #.exists()
             
-            if not term or not term :
+            if not term or not session :
                 return Response({"error": "Invalid Session or Term "}, status=status.HTTP_200_OK)
-            
-            valid_studentsIds = Student.objects.filter(
-                    user__is_active=True,
-                    class_rooms__class_room__section__school=valid_school,
-                    class_rooms__class_room__id__in=classesIds,
-                    class_rooms__status__in=['active', 'enrolled']
-                ).distinct().values_list("id",flat=True)
-            
+            valid_classIds = valid_school.classrooms.filter(id__in = classesIds).distinct().values_list("id",flat=True)
             # call the fee generator 
-            generated = generate_student_term_fees_task.delay(session.id,term.id,list(valid_studentsIds))
-            
-            return Response({"success": "fee is generating in the background","generated":True}, status=status.HTTP_200_OK)
+            # gen = generate_student_term_fees_task(school_id,session.id,term.id,list(valid_classIds))
+            gen = generate_student_term_fees_task.delay(school_id,session.id,term.id,list(valid_classIds))
+            if gen :
+                try :
+                    cache.delete_pattern(
+                        f"financedashbord_{school_id}_*"
+                    )
+                    cache.delete_pattern(
+                        f"configured_classes_{school_id}_*"
+                    )
+                    cache.delete_pattern(
+                        f"financedashbordstudenttrxs_{school_id}_*"
+                    )
+                except :
+                    pass
+            return Response({"success": "fee is generating in the background \n for active students","generated":True}, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
         
-class DirectorStudentPaymentView(APIView):
-    permission_classes = [DirectorUserPermission]
-    # parser_classes =[MultiPartParser,FormParser]
-    
+class StudentPaymentView(APIView) :
+    permission_classes = [permissions.IsAuthenticated]
     def get(self, request, school_id, payment_id):   ## log payment when the payment is made
-        # try:
-            director = request.user.director
-            
-            #--------------- validate director actions -------------------
-            valid_school = School.objects.filter(director_id = director.id, id=school_id).first()
+        try:
+            valid_school = School.objects.filter(id=school_id).first()
             if not valid_school:
-                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
-            #--------------- end  validate director actions -------------------
-            
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
+            cache_key = f"paymentinit_{school_id}_{payment_id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
             payment = PaymentInitiation.objects.filter(
                 id = payment_id ,
                 school = valid_school
-            ).first()
+            ).prefetch_related("students").select_related(
+                'term','session'
+                ).first()
             if not payment:
                 return Response({"error": "payment not found!"}, status=status.HTTP_200_OK)
             
             serializer = PaymentInitiationReadSerializer(payment) 
-            return Response({
+            resp = {
                     "success": "Payment fetched Successfully",
                     "fetchedPayment": serializer.data
-                }, status=status.HTTP_200_OK)
+                }
+            try:
+                cache.set(cache_key,resp,timeout=5*60)
+            except:
+                pass
+            return Response(resp, status=status.HTTP_200_OK)
                     
-        # except Exception as e :
-            # return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
+class StudentPaymentOnlyStaffView(APIView) :
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_PAYMENTS]
         
     def post(self, request):   ## log payment when the payment is made
         try:
             pin = request.data.get( "pin" )
             school_id = request.data.get( "school" )
-            director = request.user.director
             
             #--------------- validate director actions -------------------
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-            valid_school = School.objects.filter(director_id = director.id, id=school_id) 
+            valid_school = School.objects.filter(id=school_id) 
             if not valid_school:
                 return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
             
@@ -347,26 +554,23 @@ class DirectorStudentPaymentView(APIView):
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
         
-    def put(self, request):   ## log payment when the payment is made
-        # try:
+    def put(self, request):   # process pending payment
+        try:
             pin = request.data.get( "pin" )
             school_id = request.data.get( "school" )
             paymentIds = request.data.get("paymentIds")
             action = request.data.get("action") # APPROVE or REJECT
             reason = request.data.get("reason")
-            director = request.user.director
             resolver = f"{request.user.role}-{request.user.first_name}-{request.user.last_name}"
             
-            #--------------- validate director actions -------------------
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-            valid_school = School.objects.filter(director_id = director.id, id=school_id) 
+            valid_school = School.objects.filter(id=school_id) 
             if not valid_school:
                 return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
-            resp = process_payment(paymentIds,school_id,action,reason,resolver)
-            print('resp: ', resp)
             
-            #--------------- end  validate director actions -------------------
+            resp = process_payment(paymentIds,school_id,action,reason,resolver)
+            
             if resp is not None and len(resp) > 0 :
                 nameField = 'approvedPayments' if action == "APPROVE" else "rejectedPayments"
                 return Response({
@@ -376,23 +580,24 @@ class DirectorStudentPaymentView(APIView):
             else : # payment processed or invalid 
                 return Response({"error": "processed or invalid" }, status=status.HTTP_200_OK)
                 
-        # except Exception as e :
-            # return Response({"error": "server error"}, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
         
-class DirectorSchoolFeeSettingsView(APIView):
-    permission_classes = [DirectorUserPermission]
+class SchoolFeeSettingsView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_SCHOOL]
+    
     def post(self, request):   ## add new school fee setting
         try:
             pin = request.data.get( "pin" )
             school_id = request.data.get( "school" )
-            director = request.user.director
             
              #--------------- validate director actions -------------------
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-            valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
+            valid_school = School.objects.filter( id=school_id)  #.exists()
             if not valid_school:
-                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
              #--------------- end  validate director actions -------------------
             
             serializer = SchoolFeeSerializer(data=request.data,context = {"request":request})
@@ -414,18 +619,16 @@ class DirectorSchoolFeeSettingsView(APIView):
         try:
             pin = request.data.get( "pin" )
             school_id = request.data.get( "school" )
-            director = request.user.director
             
-             #--------------- validate director actions -------------------
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-            valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
+            valid_school = School.objects.filter(id=school_id)
             if not valid_school:
-                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
             
             valid_fee_id = ClassFeeSetting.objects.filter(school=valid_school.first(), id=fee_id).first()  #.exists()
             if not valid_fee_id:
-                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+                return Response({"error": "Invalid School-Fee Entry"}, status=status.HTTP_200_OK)
              #--------------- end  validate director actions -------------------
             
             serializer = SchoolFeeSerializer(valid_fee_id, data=request.data, context = {"request":request})
@@ -445,14 +648,11 @@ class DirectorSchoolFeeSettingsView(APIView):
         
     def delete(self, request,school_id,fee_id,pin):   ## delete school fee setting
         try:
-            director = request.user.director
-            
-             #--------------- validate director actions -------------------
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-            valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
+            valid_school = School.objects.filter(id=school_id) 
             if not valid_school:
-                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
             
             valid_fee_id = ClassFeeSetting.objects.filter(school=valid_school.first(), id=fee_id).first()  #.exists()
             if not valid_fee_id:
@@ -466,60 +666,3 @@ class DirectorSchoolFeeSettingsView(APIView):
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
         
-        
-# class DirectorClassTransferView(APIView):
-#     permission_classes = [DirectorUserPermission]
-    
-#     def put(self, request):
-#         try:
-#             pin = request.data.get( "pin" )
-#             school_id = request.data.get( "school" )
-#             target_class_id = request.data.get("target_class_id")
-#             current_class_id = request.data.get("current_class_id")
-#             transfer_students_ids = request.data.get("transfer_students_ids")
-#             print('transfer_students_ids: ', transfer_students_ids)
-            
-#             #--------------- validate director actions -------------------
-            # director = request.user.director
-            
-#             if not request.user.pins.checkPin(pin) :
-#                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-            
-#             valid_school = School.objects.filter(director_id = director.id, id=school_id)  #.exists()
-#             if not valid_school:
-#                 return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
-            
-#              #--------------- end  validate director actions -------------------
-#             if not all([school_id, target_class_id, transfer_students_ids]):
-#                 return Response(
-#                     {"error": "Missing required fields"},
-#                     status=status.HTTP_200_OK
-#                 )
-            
-#             from_class = ClassRoom.objects.filter(id = current_class_id ).first()
-#             to_class = ClassRoom.objects.filter(id=target_class_id ).first()  
-#             # implement transfer logic 
-#             if not to_class :
-#                 return Response({"error": "Invalid class selection"}, status=status.HTTP_200_OK)  
-            
-#             students = Student.objects.filter(id__in=transfer_students_ids, school__id=school_id).all()
-#             if not students :
-#                 return Response({"error": "Invalid students data"}, status=status.HTTP_200_OK)  
-            
-#             for student in students:
-#                 if from_class : 
-#                     # remove student from current class 
-#                     StudentClassEnrollment.objects.filter(Q(student=student, class_room=from_class), Q(status='active') | Q(status='enrolled') ).update(status='transfered', date_left = timezone.now())
-                
-#                 # add student to new class 
-#                 # add logic here to make it auto or need approval 
-#                 StudentClassEnrollment.objects.create(student=student, class_room=to_class, status='active')
-#             serializer = StudentDetailSerializer(students,many=True, context = {"request":request})
-#             # if serializer.is_valid() :
-#             return Response({
-#                     "success": f"Student Trasfered to {to_class.name} successfully",
-#                     "trans_students": serializer.data
-#                 }, status=status.HTTP_200_OK )
-                
-#         except Exception as e :
-#             return Response({"error": "server error"}, status=status.HTTP_200_OK)   

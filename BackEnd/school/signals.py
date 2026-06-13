@@ -30,8 +30,6 @@ def reset_user_log_caches(sender, instance, created ,**kwargs):
     
         
 
-@receiver(post_save, sender=School)
-@receiver(post_delete, sender=School)
 
 @receiver(post_save, sender=Student)
 @receiver(post_delete, sender=Student)
@@ -81,7 +79,16 @@ def reset_user_log_caches(sender, instance, created ,**kwargs):
 @receiver(post_save, sender=TeachingAssignment)
 @receiver(post_delete, sender=TeachingAssignment)
 def clear_dashboard_cache(sender, instance, **kwargs):
-        cache_key = f"school_{instance.school.id}_dashbord"
+        try :
+            cache_key = f"school_{instance.school.id}_dashbord"
+            cache.delete(cache_key)
+        except :
+            pass
+        
+@receiver(post_save, sender=School)
+@receiver(post_delete, sender=School)
+def clear_dashboard_cache(sender, instance, **kwargs):
+        cache_key = f"school_{instance.id}_dashbord"
         try :
             cache.delete(cache_key)
         except :

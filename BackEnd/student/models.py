@@ -23,7 +23,7 @@ GENDER_CHOICES = (
     ('female', 'Female'),
     ('other', 'Other'), 
 )
-
+ 
 
 # Create your models here.
 class StudentClassEnrollment(models.Model):

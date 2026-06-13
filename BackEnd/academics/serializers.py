@@ -19,7 +19,7 @@ class MiniClassRoomSerializer(serializers.ModelSerializer) :
         return obj.teaching_assignments.all().count() if obj.teaching_assignments else 0
 
     def get_studentsCount(self,obj):
-        return obj.student_enrollments.filter(status__in=["active",'enrolled']).count() if obj.student_enrollments else None
+        return len(obj.student_enrollments.filter(status__in=["active",'enrolled'])) if obj.student_enrollments else None
     
     def get_teachersCount(self,obj):
         return obj.teaching_assignments.count() if obj.teaching_assignments else 0

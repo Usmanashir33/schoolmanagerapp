@@ -21,7 +21,7 @@ from student.models import Student, StudentClassEnrollment
 from school.models import School,ActivityLog
 from school.models import School,Session
 
-from school.serializers import SchoolSettingsSerializer,ActivityLogSerializer
+from school.serializers import *
 from school.models import School ,SchoolDeleteRequest
 from school.permissions import HasSchoolPermission, SchoolPermissions
 from school.tasks import SchoolServices
@@ -37,10 +37,10 @@ from .tasks import promote_students_task
 #                                       ACADEMIC SETTINGS                           
 #==================================================================================================
 
-class DirectorAcademicSettingsView (APIView) :
+class AcademicSettingsView (APIView) :
     parser_classes =[MultiPartParser,FormParser]
     permission_classes = [HasSchoolPermission]
-    required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_SCHOOL]
     
     def put(self, request, school_id) :
         try:
@@ -48,7 +48,7 @@ class DirectorAcademicSettingsView (APIView) :
             pin = request.data.get('pin')
             if not request.user.pins.checkPin(pin) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
-            school = School.objects.filter(id=school_id).first()  #.exists()
+            school = School.objects.filter(id=school_id).prefetch_related("sessions",'terms').first()  #.exists()
             if not school: 
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
             
@@ -56,7 +56,11 @@ class DirectorAcademicSettingsView (APIView) :
             # by checking  directord pin 
             if serializer.is_valid() : 
                 serializer.save()  
-                normalized_data = DirectorSchoolSerializer(serializer.instance).data
+                school_inst = serializer.instance
+                school = School.objects.filter(id=school_inst.id).prefetch_related("sessions",'terms').first()  #.exists()
+                school_data = SchoolSerializer(school_inst).data
+                sessions = SessionSerializer(school.sessions.all(),many=True).data
+                terms = TermSerializer(school.terms.all(),many=True).data
                  # send the email to director
                 try:    
                     html_content = generate_school_update_email(
@@ -70,7 +74,10 @@ class DirectorAcademicSettingsView (APIView) :
                     )
                 except Exception :
                     pass 
-                return Response({"success":"school updated successfully", "updated_school": normalized_data}, status=status.HTTP_200_OK)
+                resp ={
+                    "school" :school_data,'sessions':sessions,"terms":terms
+                }
+                return Response({"success":"school academics updated successfully", "updated_academics": resp}, status=status.HTTP_200_OK)
             return Response({'error': 'Updated data meybe not available change'}, status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK)
@@ -149,7 +156,7 @@ class ClassEnrollmentView(APIView):
                 )
             
             to_class = ClassRoom.objects.get(
-                id=target_class_id,section__school__id = school_id 
+                id=target_class_id,school__id = school_id 
             ) or None
             # implement transfer logic 
             if not to_class :

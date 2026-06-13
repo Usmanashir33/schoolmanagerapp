@@ -12,8 +12,8 @@ def get_active_class_rooms(self, obj) :
     enrollments = StudentClassEnrollment.objects.filter(student=obj, status__in = ['active', 'enrolled'])
     return [enrollment.class_room.id for enrollment in enrollments]
     
-def net_balance_calculator(last_trx, new_amount, operation):
-    previous_balance = float(last_trx.net_balance) if last_trx else 0
+def net_balance_calculator(net_balance, new_amount, operation):
+    previous_balance = float(net_balance) if net_balance else 0
 
     if operation == "FEE":
         return previous_balance - float(new_amount)
@@ -21,23 +21,23 @@ def net_balance_calculator(last_trx, new_amount, operation):
     elif operation in ["PAYMENT", "REFUND"]:
         return previous_balance + float(new_amount)
 
-def get_trx_status(last_trx,currentFee,operation) :
-    if not last_trx :
+def get_trx_status(last_balance,currentFee,operation) :
+    if not last_balance :
         return "UNPAID"
     
     if operation == "FEE" : # fee is negative 
-        remaining = (float(last_trx.net_balance) -  float(currentFee))
+        remaining = (float(last_balance) -  float(currentFee))
         if   remaining >=  0 :
             return "PAID"
         
-        elif remaining  <  0 and  remaining >  float(last_trx.net_balance) :
+        elif remaining  <  0 and  remaining >  float(last_balance) :
             return "PARTIAL"
         
         else :
             return "UNPAID"
         
     elif operation in  ["PAYMENT","REFUND"] :
-        float(last_trx.net_balance) + float(currentFee)
+        float(last_balance) + float(currentFee)
         return 'UNPAID'
 
 from django.db import transaction
@@ -47,13 +47,12 @@ from school.models import School
 
 @transaction.atomic
 def process_payment(payment_ids, valid_school_id, action, note, resolver):
-    school = School.objects.filter(id = valid_school_id).first()
+    # school = School.objects.filter(id = valid_school_id).first()
     pending_payments = PaymentInitiation.objects.filter(
         school__id =valid_school_id,
         status="PENDING",
         id__in=payment_ids
     ).prefetch_related("students")
-    print('pending_payments: ', pending_payments)
 
     processed  = []
 
@@ -145,7 +144,6 @@ def process_payment(payment_ids, valid_school_id, action, note, resolver):
                     break 
                 
                 fee_remainder  = float(fee.total_amount) - float(fee.amount_paid) #
-                # debt = abs(fee_remainder)
                 if payment_amount >= fee_remainder : # PAID 
                     settler = fee_remainder 
                     fee.amount_paid = float(fee.amount_paid) +  settler

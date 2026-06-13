@@ -18,6 +18,13 @@ GENDER = (
     ("female","Female"),
     ("other","Other"),  
 )
+SESSION_TIMEOUTS = ( 
+    ("30m","30 Minutes"),
+    ("1h","1 Hour"),
+    ("4h","4 Hours"),
+    ("24h","24 Hours"),  
+    ("2d","2 Days"),  
+)
 
 VERIFICATION_STATUS = ( 
     ("VERIFIED",'VERIFIED'),
@@ -61,6 +68,10 @@ class User(AbstractUser):
     # security
     otp_required = models.BooleanField(_("OTP Required"),default=True)
     pin_set = models.BooleanField(_("Payment Pin Set"),default=False)
+    login_alerts = models.BooleanField(_("Login Alerts"),default=True)
+    session_timeout = models.CharField(_("Session Timeout"), max_length=10, default='1d', choices=SESSION_TIMEOUTS, blank=True)
+    
+
     
     # limitations 
     is_staff = models.BooleanField(default=False)

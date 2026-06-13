@@ -7,89 +7,113 @@ from django.utils import timezone
 from .models import StudentTransaction,PaymentInitiation
 from .utils import net_balance_calculator ,get_trx_status
 from student.models import Student, StudentClassEnrollment
-from school.models import Session,Term
+from school.models import Session,Term,School
+from django.core .cache import cache
 
 
 @shared_task
-def generate_student_term_fees_task(session_id, term_id, filtered_student_ids):
-    session  = Session.objects.get(id =session_id)
-    term  = Term.objects.get(id =term_id)
-    students = Student.objects.filter(id__in = filtered_student_ids)
-    
-    created_transactions = []
+def generate_student_term_fees_task(school_id, session_id, term_id, class_ids):
 
-    class_fee_map = {}
-    fees = session.school.class_fee_settings.prefetch_related("class_rooms")
-    for fee in fees :
-        for class_room in fee.class_rooms.all():
-            class_fee_map[class_room.id] = fee.amount
-            
-    # 🔥 NEW: Get last transaction per student (1 query)
+    school = School.objects.filter(id=school_id).prefetch_related(
+        'terms', 'sessions', 'classrooms', 'class_fee_settings__class_rooms'
+    ).first()
+
+    term = school.terms.get(id=term_id)
+    session = school.sessions.get(id=session_id)
+
+    classrooms = school.classrooms.filter(id__in=class_ids)
+
+    classes_students = Student.objects.filter(
+        user__is_active=True,
+        school=school,
+        class_rooms__class_room__id__in=class_ids,
+        class_rooms__status__in=['active', 'enrolled']
+    ).prefetch_related("class_rooms__class_room").distinct("id")
     
-    last_trx_map = {}
+    # ✅ Fee map
+    class_fee_map = {}
+    for fee in school.class_fee_settings.all():
+        for cr in fee.class_rooms.all():
+            class_fee_map[cr.id] = fee.amount
+
+    # ✅ Last transactions (single query)
     last_trxs = (
     StudentTransaction.objects
-        .filter(student_id__in=filtered_student_ids)
-        .order_by("student_id", "-created_at")
+        .filter(student__in=classes_students)
+        .order_by("student__id", "-created_at")
+        .distinct("student__id")
     )
+
+    old_last_trx_netbalances_map = {}
     for trx in last_trxs:
-        if trx.student_id not in last_trx_map:
-            last_trx_map[trx.student_id] = trx
-    
+        if  not old_last_trx_netbalances_map.get(trx.student.id):
+            old_last_trx_netbalances_map[trx.student.id] = trx.net_balance or 0
+
+    latest_trx_netbalances_map = {}
+
+    # ✅ Existing logs
     existing = set(
         StudentTransaction.objects.filter(
             session=session,
-            term=term
-        ).values_list("student_id", "class_room_id")
+            term=term,
+            class_room__in=classrooms,
+            student__in=classes_students
+        ).values_list("student__id", "class_room__id")
     )
-    # students = students.filter(user__is_active=True) 
-    for student in students :
-        if not hasattr(student,'class_rooms'): # to make sure student has ever been enrolled in a class 
+
+    # ✅ Group students per class
+    from collections import defaultdict
+    class_students_map = defaultdict(list)
+
+    for student in classes_students :
+        for cr in student.class_rooms.all():
+            if str(cr.class_room_id) in class_ids and cr.status in ['active', 'enrolled']:
+                class_students_map[str(cr.class_room_id)].append(student)
+    # print('class_students_map: ', class_students_map)
+
+    created_transactions = []
+
+    # ✅ Main logic
+    for cls in classrooms:
+        fee = class_fee_map.get(cls.id)
+        if not fee:
             continue
-        active_classes = student.class_rooms.filter(
-            status__in=["active", "enrolled"]
-        )
+        stdts =class_students_map.get(cls.id, []) 
+        # print('stdts: ', stdts) 
+        # break
 
-        if not active_classes.exists():
-            continue # student has no any class activated  yet pass to the next  
+        for student in stdts :
 
-        for enrollment in active_classes:
-            class_id = enrollment.class_room.id
+            if (student.id, cls.id) in existing:
+                continue
 
-            if (student.id, class_id) in existing:
-                continue # already fee assigned ,
+            last_netbalance = latest_trx_netbalances_map.get(
+                student.id,
+                old_last_trx_netbalances_map.get(student.id, 0)
+            )
 
-            fee = class_fee_map.get(class_id)
-            if not fee:
-                continue # student class has ne fee settled so far  pass to the next  
-            
-            # lastTrx = StudentTransaction.filter(
-            #     student = student
-            # ).order_by("-created_at").first()
-            
-            lastTrx = last_trx_map.get(student.id)
-            net_balance =  net_balance_calculator(lastTrx,fee,"FEE")
-            status =       get_trx_status(lastTrx,fee,"FEE") 
-            
-            created_transactions.append (
+            net_balance = net_balance_calculator(last_netbalance, fee, "FEE")
+            status = get_trx_status(last_netbalance, fee, "FEE")
+
+            created_transactions.append(
                 StudentTransaction(
-                    student=student ,
-                    class_room=enrollment.class_room ,
+                    student=student,
+                    class_room=cls,
                     session=session,
                     term=term,
                     total_amount=float(fee),
                     amount_paid=0,
                     transaction_type="FEE",
-                    description=f"Term fee for {enrollment.class_room.name}-{session.name}-{term.name}",
+                    description=f"Term fee for ⟪{cls.name}⟫» {session.name}●{term.name}",
                     due_date=timezone.now() + timezone.timedelta(days=30),
-                    net_balance = net_balance ,
-                    status = status ,
+                    net_balance=net_balance,
+                    status=status,
                 )
             )
-    # BULK INSERT (very fast)
-    StudentTransaction.objects.bulk_create(created_transactions)
-    print("dones ",len(created_transactions))
+
+            latest_trx_netbalances_map[student.id] = net_balance
+        StudentTransaction.objects.bulk_create(created_transactions)
+        created_transactions = []
+
 
     return len(created_transactions)
-
-

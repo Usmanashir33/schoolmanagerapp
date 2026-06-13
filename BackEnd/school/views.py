@@ -25,9 +25,10 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser,FormParser
 
 
-from school.permissions import HasSchoolPermission,SchoolPermissions
 from .models import  *
 from .serializers import *
+from .permissions import HasSchoolPermission, SchoolPermissions
+
 from director.models import Director 
 from authUser.models import User,PendingEmail
 from authUser.serializers import MiniUserSerializer
@@ -46,6 +47,7 @@ from staff.models import Staff
 from finance.models import *
 from finance.serializers import SchoolFeeSerializer
 from django.core.cache import cache
+from .tasks import *
 
 
 # we need directors verifed email to ctreat a school  
@@ -268,15 +270,13 @@ class SchoolAndDirectorCreateView(APIView) :
 #==================================================================================================
 
 class DirectorSchoolDetailView(APIView) :
-    parser_classes =[MultiPartParser,FormParser]
     permission_classes=[
         permissions.IsAuthenticated,
         DirectorUserPermission,
     ]
     def get(self, request,school_id): # get school data 
-        # try:
+        try:
             # limited to 15  recordes    per model to avoid overloading the response and client side
-            start = timezone.now()
             cache_key = f"school_{school_id}_dashbord"
             try :
                 cached_response = cache.get(cache_key)
@@ -330,7 +330,6 @@ class DirectorSchoolDetailView(APIView) :
                     ),
                 ).first()
             end = timezone.now()
-            print("db fetch end", end - start)
             if not school_data :
                 return Response({"error":"school not found "},status=status.HTTP_200_OK)
             resp = { 
@@ -352,19 +351,21 @@ class DirectorSchoolDetailView(APIView) :
                 "school_roles" : SchoolRoleSerializer(school_data.roles,many=True).data,
                 }
             f = timezone.now()
-            print("serialization tm  end", f - end)
-            print("total tm" , f - start )
             try :
                 cache.set(cache_key,resp,timeout=60*3) # Cache for 3 minutes)
             except:
                 pass
             return Response(resp , status=status.HTTP_200_OK)
-        # except:
-            # return Response({"error":"server error"},status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK)
         
+class SchoolDetailView(APIView) :
+    parser_classes =[MultiPartParser,FormParser]
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_SCHOOL]
+    
     def put(self, request, school_id) :
-        # try:
-            director = request.user.director
+        try:
             # ============= required fields ==============
             request_data = request.data.copy() 
             pin = request.data.get('pin')
@@ -374,6 +375,9 @@ class DirectorSchoolDetailView(APIView) :
             new_phone = request.data.get('phone')
             logo = request_data.get('logo',None)
             request_data.pop('picture',None) 
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
             # validate logo if file not path 
             if logo and not  isinstance(logo,UploadedFile) :
                 request_data.pop('logo',None)
@@ -382,7 +386,7 @@ class DirectorSchoolDetailView(APIView) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
             
             # validate director actions 
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            school = School.objects.filter(id=school_id).first()  
             if not school: 
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
             
@@ -406,7 +410,7 @@ class DirectorSchoolDetailView(APIView) :
                 if existing_field.tag.lower() == new_tag.lower():
                     return Response({"error": "Tag already exists"})
                         
-            serializer = DirectorSchoolSerializer(school, data=request_data, context={"request":request} ,partial=True)
+            serializer = SchoolSerializer(school, data=request_data, context={"request":request} ,partial=True)
             if serializer.is_valid() : 
                 serializer.save()  
                  # send the email to director
@@ -416,7 +420,7 @@ class DirectorSchoolDetailView(APIView) :
                         school.name, 
                     )
                     send_html_email.delay(
-                        subject="School Account Updated" ,
+                        subject="School Updated" ,
                         to_email=[school.director.email,school.email] , 
                         html_content=html_content
                     )
@@ -424,13 +428,11 @@ class DirectorSchoolDetailView(APIView) :
                     pass 
                 return Response({"success":"school updated successfully", "updated_school": serializer.data}, status=status.HTTP_200_OK)
             return Response({'error': 'School update failed!'}, status=status.HTTP_200_OK)
-        # except:
-            # return Response({"error":"server error"},status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK)
     
     def post(self, request,school_id): # delting the school request 
-        try:
-            director = request.user.director
-            
+        try :
             # ============= required fields ==============
             pin = request.data.get('pin')
             reason  = request.data.get('reason')
@@ -443,7 +445,7 @@ class DirectorSchoolDetailView(APIView) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             
              # validate director actions 
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            school = School.objects.filter(id=school_id).first()  #.exists()
             if not school:
                 return Response({"error": "school not Found"}, status=status.HTTP_200_OK)
             
@@ -510,6 +512,51 @@ class AllUserLogsView(APIView): #paginated request
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
 
+class SchoolConfigView(APIView) :
+    permission_classes=[HasSchoolPermission]
+    permissions_required = [
+        SchoolPermissions.CAN_MANAGE_SCHOOL
+    ]
+    def post(self, request) :
+        try:
+            pin = request.data.get('pin')
+            school_id = request.data.get("school")
+            
+            config_type = request.data.get("configType",'')
+            name = request.data.get("name")
+            
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
+            school = School.objects.filter(id=school_id).prefetch_related("sessions",'terms').first() 
+            if not school: 
+                return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
+            
+            # validate no session exist with this name 
+            if config_type == "SESSION" :
+                existed = school.sessions.filter(name__exact = name).first()
+                if existed :
+                    return Response({"error": "Session with this name already exist"}, status=status.HTTP_200_OK)
+                # create new session 
+                new_session = SessionSerializer(data=request.data)
+                if new_session.is_valid() :
+                    new_session.save()
+                    data = new_session.data 
+                    return Response({"success":"New Session Created ","new_session":data}, status=status.HTTP_200_OK)
+            
+            # validate no term exist with this name 
+            if config_type == "TERM" :
+                existed = school.terms.filter(name__exact = name).first()
+                if existed :
+                    return Response({"error": "Term with this name already exist"}, status=status.HTTP_200_OK)
+                # create new session 
+                new_term = TermSerializer(data=request.data)
+                if new_term.is_valid() :
+                    new_term.save()
+                    data = new_term.data 
+                    return Response({"success":"New Term Created ","new_term":data}, status=status.HTTP_200_OK)
+            return Response({"error":"invalid details "},status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK) 
 class SchoolRoleView(APIView) :
     permission_classes=[HasSchoolPermission]
     permissions_required = [
@@ -537,9 +584,26 @@ class SchoolRoleView(APIView) :
             
             new_role = SchoolRoleSerializer(data=request.data,context = {"request":request,'perms':find_perms})
             if new_role.is_valid() :
-                new_role.save()
-                data = new_role.data 
-                return Response({"success":"New Role Created ","new_role":data}, status=status.HTTP_200_OK)
+                    new_role.save()
+                    new_log = ActivityLog.objects.create(
+                        school = school ,
+                        user=request.user,
+                        action="CREATE",
+                        module="ROLES",
+                        description=f"{role_name} is added."
+                    )
+                    user_room = f"room{request.user.id}"
+                    log_data = ActivityLogSerializer(new_log).data
+                    data = {
+                        "type": "send_response1",
+                        "activity_log": log_data,
+                        }
+                    try:
+                        SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                    except :
+                        pass
+                    data = new_role.data 
+                    return Response({"success":"New Role Created ","new_role":data}, status=status.HTTP_200_OK)
             return Response({"error":"invalid details "},status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
@@ -557,7 +621,7 @@ class SchoolRoleView(APIView) :
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
             
             # find the role  and prevent director edition 
-            role = school.roles.filter(id=role_id).first()
+            role = school.roles.filter(id=role_id).prefetch_related('permissions','users').first()
             if not role or role.name.lower() == "director":
                 return Response({"error": "Role not found!"}, status=status.HTTP_200_OK)
             
@@ -574,9 +638,63 @@ class SchoolRoleView(APIView) :
             updated_role = SchoolRoleSerializer(role,data=request.data,context = {"request":request,'perms':find_perms})
             if updated_role.is_valid() : 
                 updated_role.save()
+                new_log = ActivityLog.objects.create(
+                        school = school ,
+                        user=request.user,
+                        action="UPDATE",
+                        module="ROLES",
+                        description=f"{role_name} is updated."
+                    )
+                user_room = f"room{request.user.id}"
+                log_data = ActivityLogSerializer(new_log).data
+                data = {
+                        "type": "send_response1",
+                        "activity_log": log_data,
+                        }
+                try:
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                except :
+                        pass
                 data = updated_role.data 
                 return Response({"success":"Role Updated Succefully! ","updated_role":data}, status=status.HTTP_200_OK)
             return Response({"error":"invalid details "},status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK) 
+    def delete(self, request,school_id,role_id,pin) :
+        try:
+            if not request.user.pins.checkPin(pin) :
+                return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
+            
+            school = School.objects.filter(id=school_id).prefetch_related("roles").first() 
+            if not school: 
+                return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
+            
+            # find the role  and prevent director edition 
+            role = school.roles.filter(id=role_id).first()
+            if not role :
+                return Response({"error": "Role not found!"}, status=status.HTTP_200_OK)
+            
+            role.delete()
+            new_log = ActivityLog.objects.create(
+                school = school ,
+                user=request.user,
+                action="DELETE",
+                module="ROLES",
+                description=f"{role.name} is not longer available"
+            )
+            user_room = f"room{request.user.id}"
+            log_data = ActivityLogSerializer(new_log).data
+            data = {
+                "type": "send_response1",
+                "activity_log": log_data,
+                }
+            try:
+                SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+            except :
+                pass
+            
+            data = {'id':role_id} 
+            return Response({"success":"Role Deleted Succefully!","deleted_role":data}, status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
 class SchoolPermsionView(APIView) :
@@ -734,20 +852,18 @@ class SchoolTemplateView(APIView) :
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
         
 class SchoolFinanceView(APIView) :
-    permission_classes=[
-        permissions.IsAuthenticated,
-        DirectorUserPermission,
+    permission_classes=[HasSchoolPermission]
+    permissions_required = [
+        SchoolPermissions.CAN_MANAGE_SCHOOL
     ]
     
     def post(self, request) :
         try:
-            # validate director actions 
-            director = request.user.director
             pin = request.data.get('pin')
             school_id = request.data.get("school")
             if not request.user.pins.checkPin(pin) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            school = School.objects.filter( id=school_id).first() 
             if not school : 
                 return Response({"error": "Invalid school data"}, status=status.HTTP_200_OK)
             finance = FinanceSettings.objects.get_or_create(school=school)[0]
@@ -765,18 +881,17 @@ class SchoolFinanceView(APIView) :
     def put(self, request,acc_id) :
         try:
             # validate director actions 
-            director = request.user.director
             pin = request.data.get('pin')
             school_id = request.data.get("school")
             
             if not request.user.pins.checkPin(pin) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
             
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            school = School.objects.filter( id=school_id).first()
             if not school: 
                 return Response({"error": "Invalid school data"}, status=status.HTTP_200_OK)
             
-            account = school.finance.bank_accounts.filter(id=acc_id).first()  #.exists()
+            account = school.finance.bank_accounts.filter(id=acc_id).first()
             if not account: 
                 return Response({"error": "Invalid account data"}, status=status.HTTP_200_OK)
                 
@@ -790,11 +905,10 @@ class SchoolFinanceView(APIView) :
     
     def delete(self, request,school_id,acc_id,pin) :
         try:
-            director = request.user.director
             if not request.user.pins.checkPin(pin) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
             
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            school = School.objects.filter(id=school_id).first()
             if not school: 
                 return Response({"error": "Invalid school data"}, status=status.HTTP_200_OK)
             
@@ -807,18 +921,3 @@ class SchoolFinanceView(APIView) :
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
     
-    def get(self, request, school_id,template_id) :
-        try:
-            director = request.user.director
-            # validate director actions 
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
-            if not school: 
-                return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
-            template = school.templates.filter(id = template_id).first()
-            serializer = TemplatesSerializer(template,many=True)
-            # by checking  directord pin 
-            if serializer.is_valid() : 
-                serializer.save()
-                return Response({"template":serializer.data}, status=status.HTTP_200_OK)
-        except:
-            return Response({"error":"server error"},status=status.HTTP_200_OK) 

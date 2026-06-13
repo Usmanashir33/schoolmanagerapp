@@ -194,7 +194,7 @@ class SchoolRole(models.Model) :
         related_name="roles"
     )
     name = models.CharField(
-        max_length=100,
+        max_length=100, 
         unique=True
     )
 
@@ -224,6 +224,8 @@ class ActivityLog(models.Model):
         ("FINANCE", "FINANCE"),
         ("SETTINGS", "SETTINGS"),
         ("PROFILE", "PROFILE"),
+        ("ROLES", "ROLES"),
+        ("PERMISSIONS", "PERMISSIONS"),
     ]
 
     id = ShortUUIDField(
