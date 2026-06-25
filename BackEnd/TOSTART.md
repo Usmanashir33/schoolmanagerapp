@@ -1,0 +1,1 @@
+in order to test phone and pc project in local server make django run in your ip , and use ip as target adress in your front end . 0.0.0.0:8001 in django and use computer ip to catch it . in your phon euse the compter ip tonaccess the fron 

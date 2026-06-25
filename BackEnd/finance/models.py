@@ -126,8 +126,7 @@ class PaymentInitiation(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
     date_initiated = models.DateTimeField(auto_now_add=True)
     date_resolved = models.DateTimeField(null=True, blank=True,auto_now=True)
-
-    resolved_by = models.CharField(max_length=100, null=True, blank=True)  # or ForeignKey(Admin)
+    resolved_by = models.CharField(max_length=100, null=True, blank=True) # or ForeignKey(Admin)
 
     def __str__(self):
         return f"{self.payer} - {self.status}"

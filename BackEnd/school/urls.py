@@ -24,9 +24,9 @@ urlpatterns = [
     path('finance/update/<str:acc_id>/', SchoolFinanceView.as_view(), name='updateFinanceData'),#Done
     path('finance/delete/<str:school_id>/<str:acc_id>/<str:pin>/', SchoolFinanceView.as_view(), name='deleteFinanceData'),#Done
     
-    
-    path('template/<str:school_id>/', SchoolTemplateView.as_view(), name='newTemplate'), #tested
-    path('template/<str:school_id>/<str:template_id>/', SchoolTemplateView.as_view(), name='get&PutTemplate'),
-    path('template/<str:school_id>/<str:template_id>/<str:pin>/', SchoolTemplateView.as_view(), name='deleteTemplate'),
+     
+    path('template/<str:school_id>/', SchoolTemplateView.as_view(), name='newTemplate'), #Done
+    path('template/<str:school_id>/<str:template_id>/', SchoolTemplateView.as_view(), name='get&PutTemplate'), #Done
+    path('template/<str:school_id>/<str:template_id>/<str:pin>/', SchoolTemplateView.as_view(), name='deleteTemplate'), #Done
     
 ]  

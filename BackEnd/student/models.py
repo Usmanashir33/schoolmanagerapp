@@ -76,6 +76,8 @@ class Student(models.Model) :
             models.Index(fields=['school', 'first_name']),
             models.Index(fields=['school', 'joined_at']),
         ]
+        # ordering=['joined_at']
+        ordering = ['joined_at']
     def save(self, *args, **kwargs):
         if not self.admission_number:
             self.admission_number = generate_unique_admission_number(self.school.tag)

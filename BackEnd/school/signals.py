@@ -2,6 +2,8 @@ from django.db.models.signals import pre_save, post_save,post_delete
 from django.dispatch import receiver
 from authUser.models import User
 from django.core.mail import send_mail
+from django.core.cache import cache
+
 
 from django.core.exceptions import ValidationError
 from .models import *
@@ -20,7 +22,6 @@ def generate_random_password(length=8):
     chars = string.ascii_letters + string.digits
     return ''.join(random.choices(chars, k=length)) 
 
-from django.core.cache import cache
 @receiver(post_save, sender=ActivityLog) 
 def reset_user_log_caches(sender, instance, created ,**kwargs):
     # Clear the cache for the user's logs
@@ -80,7 +81,7 @@ def reset_user_log_caches(sender, instance, created ,**kwargs):
 @receiver(post_delete, sender=TeachingAssignment)
 def clear_dashboard_cache(sender, instance, **kwargs):
         try :
-            cache_key = f"school_{instance.school.id}_dashbord"
+            cache_key = f"school_{instance.school_id}_dashbord"
             cache.delete(cache_key)
         except :
             pass

@@ -15,6 +15,7 @@ class MiniClassRoomSerializer(serializers.ModelSerializer) :
     teachersCount = serializers.SerializerMethodField(read_only = True)
     
     subjectsCount = serializers.SerializerMethodField(read_only = True)
+    
     def get_subjectsCount(self,obj): 
         return obj.teaching_assignments.all().count() if obj.teaching_assignments else 0
 
@@ -98,19 +99,7 @@ class SchoolSectionDetailSerializer(serializers.ModelSerializer):
         return Teacher.objects.filter(
             subjects__teaching_assignments__classroom__section__id=obj.id
         ).distinct().count()
-    
         
-    # def get_classrooms(self, obj):
-    #     return obj.classrooms.values("id",'name',"form_teacher__full_name").distinct()
-        
-    # students = serializers.SerializerMethodField(read_only = True)
-    # def get_students(self,obj):
-    #     students = StudentClassEnrollment.objects.filter(
-    #         class_room__section=obj,
-    #         status__in=["active", "enrolled"]
-    #     )[:15]
-    #     return MiniStudentSerializer(students,many=True).data
-    
     class Meta:  
         model = SchoolSection 
         fields ='__all__'
@@ -195,13 +184,30 @@ from django.db import transaction
 class SubjectSerializer(serializers.ModelSerializer) :
     teachersCount= serializers.SerializerMethodField(read_only = True)
     classesCount = serializers.SerializerMethodField(read_only = True)
+    class_rooms = serializers.SerializerMethodField(read_only = True)
+    teachers = serializers.SerializerMethodField(read_only = True)
     
+    def get_class_rooms(self,obj): 
+        return obj.teaching_assignments.values_list('classroom_id',flat=True).distinct('id') if obj.teaching_assignments else []
+    
+        # return [{
+        #     'id':s.subject.id,
+        #     "teacher":{
+        #         "id":s.teacher.id,
+        #         "name":f"{s.teacher.title} {s.teacher.first_name} {s.teacher.last_name}",
+        #         "staff_id":s.teacher.staff_id,
+        #     }
+        # } for s in ass]
+    def get_teachers(self,obj) : 
+        return obj.teaching_assignments.values('classroom','teacher') if obj.teaching_assignments else []
+        
+        
     def get_classesCount(self,obj) :
-        classes_map = len(obj.teaching_assignments.values_list('classroom__id', flat=True).distinct())
+        classes_map = obj.teaching_assignments.values_list('classroom_id', flat=True).distinct().count()
         return classes_map
     
     def get_teachersCount(self,obj) : 
-        teachers = len(obj.teaching_assignments.values_list('teacher__id', flat=True).distinct())
+        teachers = obj.teaching_assignments.values_list('teacher_id', flat=True).distinct().count()
         return teachers
     
     class Meta:  

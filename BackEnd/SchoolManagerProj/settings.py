@@ -51,14 +51,10 @@ INSTALLED_APPS = [
     
     # custom apps 
     'academics' ,
-    # 'academics' ,
     'core' ,
     'authUser' ,
     'director' ,
     'school' ,
-    # 'section' ,
-    # 'classroom' ,
-    # 'subject' ,
     'student'  ,
     'teacher' ,
     'staff' ,
@@ -106,9 +102,8 @@ SIMPLE_JWT = {
 
 
 CORS_ALLOWED_ORIGINS = [
-    "http://192.168.203.26:5173",
-    "http://197.210.53.209:5173",
     'http://localhost:5173',
+    'http://192.168.139.26:3000', # put computer ip in dev 
     'http://localhost:3000',
     "https://edu-front-sandy.vercel.app"
 ]
@@ -117,6 +112,8 @@ CORS_ALLOWED_ORIGIN_ALL = True
 CSRF_TRUSTED_ORIGINS = [
    'http://192.168.203.26:5173',  # Replace with your ngrok URL
    'http://192.168.18.18',  # Replace with your ngrok URL
+   "http://192.168.139.26:3000"
+   "http://192.168.139.26:3000"
 ]
 ALLOWED_HOSTS = ['*']  # for dev only; replace with your LAN IP or domain in prod
 

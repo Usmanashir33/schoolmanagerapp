@@ -15,6 +15,21 @@ class TemplatesSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from django.db import transaction
 
+class MiniSchoolSerializer(serializers.ModelSerializer):
+    logo = serializers.SerializerMethodField(read_only =True)
+    class Meta:  
+        model = School
+        exclude = [
+            'on_delete_request',
+            'lock_records',
+            'grading_system',
+            'auto_promotion',
+            'max_marks',
+        ]
+        read_only_fields = ['id', 'joined_at','ref_id','director']
+    
+    def get_logo(self, obj):
+        return obj.logo.url if obj.logo else None
 class SchoolSerializer(serializers.ModelSerializer):
     logo = serializers.SerializerMethodField(read_only =True)
     class Meta:  

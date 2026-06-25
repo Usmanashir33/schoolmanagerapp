@@ -1,4 +1,4 @@
-from django.db.models import Sum, Avg
+from django.db.models import Sum, Avg,Prefetch
 from .models import  ReportSheet, StudentResult ,ResultBatch ,CharacterBatch
 from student.models import Student
 from school.models import School , Session , Term
@@ -14,97 +14,14 @@ from openpyxl import Workbook , load_workbook
 from openpyxl.styles.protection import Protection
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, Protection
 from openpyxl.formatting.rule import CellIsRule
+from openpyxl.formatting.rule import FormulaRule
 from rest_framework.exceptions import ValidationError
 
-
-def generate_report_and_position(term_id, session_id ,class_id, students):
-    term = Term.objects.filter(id=term_id).first()
-    session = Session.objects.filter(id=session_id).first()
-    class_room = ClassRoom.objects.filter(id=class_id).first()
-    report_data = []
-    
-    # Step 1: Generate report sheets 
-    for student in students :
-        subject_totals = StudentResult.objects.filter(
-            student=student,
-            batch__term=term,
-            batch__session = session
-        )
-        # make sure all the results are approved before report shit is generated
-        non_approved_results = subject_totals.filter(batch__approved = False).exists()
-        if non_approved_results :
-            raise ValidationError({"error" : "Non Approved Results Found!"})
-        
-        # the architecture dont need this at all 
-        # non_approved_skills = CharacterBatch.objects.filter(
-        #     term = term,
-        #     session = session,
-        #     class_room = class_room,
-        #     approved = False ).exists()
-        # if non_approved_skills :
-        #     raise ValidationError({"error" : "Students Char&Skills not Approved!"})
-        
-        # aggregate results total 
-        subject_totals = subject_totals.aggregate(total_marks=Sum('total'), average_marks=Avg('total'))
-        if subject_totals['total_marks'] is None:
-            continue
-        total = subject_totals['total_marks']
-        avg = subject_totals['average_marks']
-        total_class_students = students.count()
-
-        if avg >= 70:
-            grade = "A"
-        elif avg >= 60:
-            grade = "B"
-        elif avg >= 50:
-            grade = "C"
-        elif avg >= 45:
-            grade = "D"
-        else:
-            grade = "F"
-
-        report, created = ReportSheet.objects.update_or_create(
-            student=student,
-            class_room = class_room,
-            term=term ,
-            session = session,
-            defaults={
-                'total_marks': total,
-                'average_marks': avg ,
-                'overall_grade': grade ,
-                "total_class_students" :total_class_students,
-            }
-        )
-        report_data.append(report)
-
-    # Step 2: Calculate positions by class
-    class_reports = ReportSheet.objects.filter(
-            class_room = class_room ,
-            term = term ,
-            session = session
-        ).order_by("-total_marks" )
-        
-    position = 0
-    last_score = None
-    skip = 0  # for handling ties
-
-    for index, result in enumerate(class_reports, start=1):
-        if result.total_marks != last_score:
-            position = index
-            position -= skip
-            skip = 0
-        else:
-            skip += 1
-
-        result.position = position
-        last_score = result.total_marks
-        result.save()
-
-    return class_reports
 
 def build_student_records_workbook(
     request_data,
     students,
+    max_marks ,
     *,
     school_name,
     class_name,
@@ -155,7 +72,7 @@ def build_student_records_workbook(
     # ----------------------------
     # TABLE HEADER
     # ----------------------------
-    headers = ["S/N", "Student Name", "Registration No", "CA1 (20)", "CA2 (20)", "EXAM (60)"]
+    headers = ["S/N", "Student Name", "Registration No", f"CA1 ({max_marks['ca1']})", f"CA2 ({max_marks["ca2"]})", f"EXAM ({max_marks['exam']})"]
     ws.append([])
     ws.append(headers)
     header_row = 6
@@ -212,12 +129,34 @@ def build_student_records_workbook(
     # ----------------------------
     if last_row >= start_row:
         # CA1 & CA2 (0-20)
-        dv_ca = DataValidation(type="whole", operator="between", formula1="0", formula2="20", allow_blank=True)
+        # dv_ca = DataValidation(type="whole", operator="between", formula1="0", formula2="20", allow_blank=True)
+        # dv_ca.add(f"D{start_row}:E{last_row}")
+        # ws.add_data_validation(dv_ca)
+        
+        dv_ca = DataValidation(
+            type="custom",
+            formula1='=OR(ISNUMBER(D6),UPPER(D6)="ABS",LOWER(D6))',
+            allow_blank=True
+        )
+
+        dv_ca.error = f"Only numbers (0–{max_marks['ca1']}) or ABS allowed"
+        dv_ca.errorTitle = "Invalid Input"
         dv_ca.add(f"D{start_row}:E{last_row}")
         ws.add_data_validation(dv_ca)
 
-        # EXAM (0-60)
-        dv_exam = DataValidation(type="whole", operator="between", formula1="0", formula2="60", allow_blank=True)
+        # # EXAM (0-60)
+        # dv_exam = DataValidation(type="whole", operator="between", formula1="0", formula2="60", allow_blank=True)
+        # dv_exam.add(f"F{start_row}:F{last_row}")
+        # ws.add_data_validation(dv_exam)
+        dv_exam = DataValidation(
+            type="custom",
+            formula1='=OR(ISNUMBER(F6),UPPER(F6)="ABS")',
+            allow_blank=True
+        )
+
+        dv_exam.error = f"Only numbers (0–{max_marks['exam']}) or ABS allowed"
+        dv_exam.errorTitle = "Invalid Input"
+
         dv_exam.add(f"F{start_row}:F{last_row}")
         ws.add_data_validation(dv_exam)
 
@@ -229,10 +168,39 @@ def build_student_records_workbook(
     red_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 
     # CA1 or CA2 > 20
-    ws.conditional_formatting.add(f"D{start_row}:E{last_row}", CellIsRule(operator='greaterThan', formula=['20'], stopIfTrue=True, fill=red_fill))
+    red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+
+    ws.conditional_formatting.add(
+        f"D{start_row}:E{last_row}",
+        CellIsRule(
+            operator="greaterThan",
+            formula=[max_marks['ca1']],
+            fill=red_fill
+        )
+    )
+    # ws.conditional_formatting.add(f"D{start_row}:E{last_row}", CellIsRule(operator='greaterThan', formula=['20'], stopIfTrue=True, fill=red_fill))
     # EXAM > 60
-    ws.conditional_formatting.add(f"F{start_row}:F{last_row}", CellIsRule(operator='greaterThan', formula=['60'], stopIfTrue=True, fill=red_fill))
+    ws.conditional_formatting.add(
+        f"F{start_row}:F{last_row}",
+        CellIsRule(
+            operator="greaterThan",
+            formula=[max_marks['exam']],
+            fill=red_fill
+        )
+    )
+    gray_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+
+    ws.conditional_formatting.add(
+        f"D{start_row}:F{last_row}",
+        FormulaRule(
+            formula=['UPPER(D6)="ABS"'],
+            fill=gray_fill
+        )
+    )
+    # ws.conditional_formatting.add(f"F{start_row}:F{last_row}", CellIsRule(operator='greaterThan', formula=['60'], stopIfTrue=True, fill=red_fill))
     # Locked columns altered (1-3)
+    
+    
     for col_letter in ['A', 'B', 'C']:
         ws.conditional_formatting.add(f"{col_letter}{start_row}:{col_letter}{last_row}",
             CellIsRule(operator='notEqual', formula=[f'{col_letter}{start_row}'], stopIfTrue=True, fill=red_fill)
@@ -321,7 +289,7 @@ def build_student_character_workbook (
     ws.append([]) # line 4
     ws.merge_cells("A5:K5")
     
-    headers = ["S/N", "Student Name", "Registration No","Punctuality", "Honesty","Neatness","Honesty","Leadership","Handwriting","Verbal Fluency","Creativity"]
+    headers = ["S/N", "Student Name", "Registration No","Punctuality", "Honesty","Neatness","Leadership","Handwriting","Verbal Fluency","Creativity"]
     ws.append(headers) # line 5 
     header_row = 6
 
@@ -364,7 +332,7 @@ def build_student_character_workbook (
             cell.border = thin_border
 
         # Editable columns
-        for col in (4, 5, 6,7,8,9,10,11 ):
+        for col in (4, 5, 6,7,8,9,10 ):
             cell = ws.cell(row=row, column=col)
             cell.protection = Protection(locked=False)
             cell.alignment = Alignment(horizontal="center", vertical="center")
@@ -438,26 +406,43 @@ def decript_scores_from_workbook(workbook_stream,request,students) -> Iterable[d
     if not all([school_id, session_id, term_id, class_id, subject_id]):
         return [], "missing hidden fields"
     
+    def parse_score(value):
+        if value is None:
+            return 0, False
+
+        value = str(value).strip().upper()
+
+        if value in {"ABS", "A", "AB"}:
+            return 0, True
+
+        try:
+            return float(value), False
+        except (ValueError, TypeError):
+            return 0, False
+    
     if str(school) != str(school_id):
-        return [], "school ID mismatch"
+        return [], "invalid school sheet"
     if str(session) != str(session_id):
-        return [], "session ID mismatch"
+        return [], "invalid session sheet"
     if str(term) != str(term_id):
-        return [], "term ID mismatch"
+        return [], "invalid term sheet"
     if str(classroom) != str(class_id):
-        return [], "class ID mismatch"
+        return [], "invalid class sheet"
     if str(subject) != str(subject_id):
-        return [], "subject ID mismatch"
+        return [], "invalid subject sheet"
 
     scores = []
+    
     for row in ws.iter_rows(min_row=7, values_only=True):
         if not any(row):
             continue
         student_name = row[1]
         student_id = row[2]  # Assuming admission number is in the 3rd column
-        ca1 = row[3] if row[3] is not None else 0
-        ca2 = row[4] if row[4] is not None else 0
-        exam = row[5] if row[5] is not None else 0
+        
+        ca1, ca1Abs = parse_score(row[3])
+        ca2, ca2Abs = parse_score(row[4])
+        exam, examAbs = parse_score(row[5])
+        
         student_exist = students.filter(admission_number = student_id).first()
         valid_student = student_exist.full_name() == student_name if student_exist else False
         if valid_student :
@@ -466,6 +451,9 @@ def decript_scores_from_workbook(workbook_stream,request,students) -> Iterable[d
                 "ca1": ca1,
                 "ca2": ca2,
                 "exam": exam,
+                "ca1Abs": ca1Abs,
+                "ca2Abs": ca2Abs,
+                "examAbs": examAbs,
             })
     batch_details =  {
         "scores" : scores,
@@ -521,8 +509,8 @@ def decript_skills_from_workbook(workbook_stream,request,students) -> Iterable[d
         leadership = row[6]
         handwriting = row[7]
         verbal_fluency = row[8]
-        verbal_fluency = row[9]
-        creativity = row[10]
+        # verbal_fluency = row[9] 
+        creativity = row[9]
         
         student_exist = students.filter(admission_number = student_id).first()
         valid_student = student_exist.full_name() == student_name if student_exist else False

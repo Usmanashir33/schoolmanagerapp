@@ -11,7 +11,7 @@ from school.models import School , Session , Term
 # -----------------------------------------------------------------------------------------------  
 class ResultBatch(models.Model):
     class_room = models.ForeignKey(
-        ClassRoom,
+        ClassRoom, 
         on_delete=models.CASCADE,
         related_name="result_batches"
     )
@@ -54,6 +54,7 @@ class ResultBatch(models.Model):
 
     is_uploaded = models.BooleanField(default=False)
     is_locked = models.BooleanField(default=False)
+    on_submit = models.BooleanField(default=False)
     approved  = models.BooleanField( default= False) 
 
     last_updated = models.DateTimeField(auto_now=True)
@@ -89,6 +90,11 @@ class StudentResult(models.Model):
     ca2 = models.PositiveIntegerField(default=0)
     exam = models.PositiveIntegerField(default=0)
 
+    ca1Abs = models.BooleanField(default = False)
+    ca2Abs = models.BooleanField(default = False)
+    examAbs = models.BooleanField(default = False)
+    is_submitted = models.BooleanField(default=False)
+    
     total = models.PositiveIntegerField(default=0)
     grade = models.CharField(max_length=2)
     remark = models.CharField(max_length=50)
@@ -121,13 +127,14 @@ class StudentResult(models.Model):
 
 class ReportSheet(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="report_sheets")
+    
     class_room = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, related_name="report_sheets")
     term = models.ForeignKey(Term, on_delete=models.SET_NULL,null=True, related_name="report_sheets")
     session = models.ForeignKey(Session, on_delete=models.SET_NULL,null=True, related_name="report_sheets")
 
-    total_marks = models.DecimalField(max_digits=6, decimal_places=2, default=0)
-    average_marks = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    overall_grade = models.CharField(max_length=2, blank=True)
+    total_marks = models.DecimalField(max_digits=6, decimal_places=2, default=0 )
+    average_marks = models.DecimalField(max_digits=5, decimal_places=2, default=0 )
+    overall_grade = models.CharField(max_length=2, blank=True) 
     
     form_teacher_comment = models.TextField( blank=True )
     head_teacher_comment = models.TextField( blank=True )
@@ -139,6 +146,13 @@ class ReportSheet(models.Model):
     last_updated = models.DateTimeField(auto_now=True) 
     
     approved  = models.BooleanField( default= False) 
+    barcode_value = models.CharField(
+        max_length=100,
+        unique=True,
+        blank=True,
+        null=True,
+        db_index=True,
+    )
     
 
     def __str__(self):
@@ -153,6 +167,7 @@ class CharacterBatch (models.Model) :
 
     is_uploaded = models.BooleanField(default=False  ) 
     is_locked =   models.BooleanField(default=False  )
+    on_submit =   models.BooleanField(default=False  )
     last_updated= models.DateTimeField(auto_now=True )
     created_at =  models.DateTimeField(auto_now_add=True )
     approved = models.BooleanField(default=False  ) 
@@ -179,7 +194,7 @@ class CharacterBatch (models.Model) :
     
 class StudentCharacterSkill(models.Model):
     batch = models.ForeignKey(CharacterBatch , on_delete=models.CASCADE, related_name = "charAndSkills")
-    student = models.ForeignKey   (Student , on_delete=models.CASCADE, related_name="skills")
+    student = models.ForeignKey (Student , on_delete=models.CASCADE, related_name="skills")
     
     # characters 
     punctuality	 = models.IntegerField( blank=True, default=3)
@@ -192,6 +207,8 @@ class StudentCharacterSkill(models.Model):
     verbal_fluency = models.IntegerField( blank=True, default=3 ) 	
     creativity = models.IntegerField( blank=True, default=3 )
     generated_at = models.DateTimeField( auto_now_add=True )
+    is_submitted = models.BooleanField(default=False)
+    
  
     def __str__(self):
         return f"{self.student} - {self.batch} Report"

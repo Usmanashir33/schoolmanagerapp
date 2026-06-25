@@ -62,7 +62,14 @@ class Session(models.Model):
     
     def __str__(self) :
         return self.name
- 
+DEFAULT_MARKS ={
+    'ca1':20,
+    'ca2':20,
+    'exam':60
+}
+
+def d_marks():
+    return DEFAULT_MARKS.copy() 
 class School(models.Model):
     id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length = 255)
     
@@ -83,6 +90,7 @@ class School(models.Model):
     lock_records = models.BooleanField(default=False)
     grading_system = models.CharField(max_length=20, default='standard', choices=GRADING_CHOICES)
     auto_promotion = models.BooleanField(default=False)
+    max_marks = models.JSONField(blank=True,null=True,default=d_marks)
 
     def save(self, *args, **kwargs):
         if not self.ref_id: 
@@ -106,7 +114,7 @@ TEMPLATE_TYPE = (
     ("Transcript","Transcript"),
     ("Certificate","Certificate"),
     ("Admission","Admission"),
-    ("Other","Other"),
+    ("Other","Other") ,
 )
     
 # model to handle school templates 

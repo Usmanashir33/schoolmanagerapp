@@ -5,7 +5,7 @@ from django.db import transaction
 from django.db.models import Q,Count,Prefetch
 from django.core.cache import cache
 
-# core app
+# core app 
 # views.py or any view file
 from core.custom_pegination import CustomPagination15
 from core.custom_pegination import CustomPagination15
@@ -350,7 +350,6 @@ class DirectorSchoolDetailView(APIView) :
                 "school_permissions" : SchoolPermissionSerializer(school_data.permissions,many=True).data,
                 "school_roles" : SchoolRoleSerializer(school_data.roles,many=True).data,
                 }
-            f = timezone.now()
             try :
                 cache.set(cache_key,resp,timeout=60*3) # Cache for 3 minutes)
             except:
@@ -757,20 +756,17 @@ class SchoolPermsionView(APIView) :
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
 class SchoolTemplateView(APIView) :
     parser_classes =[MultiPartParser,FormParser]
-    permission_classes=[
-        permissions.IsAuthenticated,
-        DirectorUserPermission,
+    permission_classes=[HasSchoolPermission]
+    permissions_required = [
+        SchoolPermissions.CAN_MANAGE_SCHOOL
     ]
     
     def post(self, request, school_id) :
         try:
-            director = request.user.director
-            # validate director actions 
             pin = request.data.get('pin')
-            print('request.data: ', request.data.get("isActive"))
             if not request.user.pins.checkPin(pin) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            school = School.objects.filter(id=school_id).first()  #.exists()
             if not school: 
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
             
@@ -785,47 +781,45 @@ class SchoolTemplateView(APIView) :
     
     def put(self, request, school_id,template_id) :
         try:
-            director = request.user.director
-            # validate director actions 
             pin = request.data.get('pin')
-            temp_activation_signal = True if  request.data.get("isActive",None) == True else False
+            temp_activation_signal = True if  request.data.get("isActive",None) == 'true' else False
             
             if not request.user.pins.checkPin(pin) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
             
-            school = School.objects.filter(director_id = director.id, id=school_id).first() #.exists()
+            school = School.objects.filter(id=school_id).prefetch_related(
+                "templates"    
+            ).first() #.exists()
             if not school: 
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
+            
             template = school.templates.filter(id=template_id).first()
             if not template: 
-                return Response({"error": "Invalid Template"}, status=status.HTTP_200_OK)
+                return Response({"error": "template not found "}, status=status.HTTP_200_OK)
+            
             serializer = TemplatesSerializer(template,data = request.data ,partial=True)
-            sameTemplates = school.templates.filter(
-                    type = serializer.instance.type
-                ).exclude(
-                    id = serializer.instance.id
-                )
-            # by checking  directord pins
             if serializer.is_valid() : 
                 serializer.save()
                 # make the remaining ones inactives if one is set to active 
-                if temp_activation_signal and len(sameTemplates) :
-                    for s in sameTemplates : 
-                        s.isActive = False
-                        s.save()
+                if temp_activation_signal :
+                    school.templates.filter(
+                        type = template.type
+                    ).exclude(
+                        id = template.id
+                    ).update(isActive =False)
+                        
                 return Response({"success": "Template Updated","updated_temp":serializer.data}, status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
     
     def delete(self, request, school_id,template_id,pin) :
         try:
-            director = request.user.director
-            # validate director actions 
             if not request.user.pins.checkPin(pin) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            school = School.objects.filter(id=school_id).prefetch_related('templates').first()  #.exists()
             if not school: 
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
+            
             template = school.templates.filter(id=template_id).first()
             if not template: 
                 return Response({"error": "Invalid Template"}, status=status.HTTP_200_OK)
@@ -837,12 +831,11 @@ class SchoolTemplateView(APIView) :
     
     def get(self, request, school_id,template_id) :
         try:
-            director = request.user.director
-            # validate director actions 
-            school = School.objects.filter(director_id = director.id, id=school_id).first()  #.exists()
+            school = School.objects.filter(id=school_id).prefetch_related('templates').first()  #.exists()
             if not school: 
                 return Response({"error": "Invalid School"}, status=status.HTTP_200_OK)
             template = school.templates.filter(id = template_id).first()
+            
             serializer = TemplatesSerializer(template,many=True)
             # by checking  directord pin 
             if serializer.is_valid() : 
