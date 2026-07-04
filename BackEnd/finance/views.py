@@ -59,8 +59,8 @@ class StudentLedgerView(APIView):
                 return Response({"error": "Invalid Student data"}, status=status.HTTP_200_OK)
                 
             strxs = StudentTransaction.objects.filter(
-                # class_room__section__school = valid_school ,
-                student = student
+                student = student,
+                student__school_id = school_id ,
             ).order_by("-created_at")
             
             student_data = MiniStudentSerializer(student).data
@@ -102,7 +102,7 @@ class PendingPaymentsView(APIView):
             ).first() 
             if not valid_school:
                 return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
-            cache_key = f"pendingpayments_{school_id}"
+            cache_key = f"pendingpayments_{school_id}_dashbord"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
@@ -152,11 +152,11 @@ class FinanceDashbordAllStudentsTrxView(APIView):
                 return Response({"error": "Invalid Session/Term"}, status=status.HTTP_200_OK)
             # Start by checking types 
             strxs = StudentTransaction.objects.filter(
-                class_room__school__id = school_id ,
+                term__school_id = school_id ,
                 term = term ,
                 session = session,
             ).select_related(
-                'student','payment_source'
+                'student','payment_source' 
             )
             #---------------------------paid-----------------------------------------------
             total_paid = strxs.filter(status__in  = ['PAID',])
@@ -241,7 +241,7 @@ class FinanceDashbordView(APIView):
                 return Response({"error": "Invalid Session/Term"}, status=status.HTTP_200_OK)
             # Start by checking types 
             strxs = StudentTransaction.objects.filter( 
-                class_room__school__id = school_id ,
+                term__school_id = school_id ,
                 term = term ,
                 session = session,
             ).select_related(
@@ -477,7 +477,7 @@ class FeeStartEngineView(APIView):
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
         
-class StudentPaymentView(APIView) :
+class StudentPaymentDetailsView(APIView) :
     permission_classes = [permissions.IsAuthenticated]
     def get(self, request, school_id, payment_id):   ## log payment when the payment is made
         try:
@@ -513,7 +513,7 @@ class StudentPaymentView(APIView) :
                     
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
-class StudentPaymentOnlyStaffView(APIView) :
+class StudentPaymentView(APIView) :
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_MANAGE_PAYMENTS]
         

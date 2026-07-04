@@ -2,6 +2,7 @@
 from django.core.cache import cache
 
 from academics.models import ClassRoom, Subject,SchoolSection,TeachingAssignment,PromotionLog
+from school.models import SchoolPermission
 from student.models import Student, StudentClassEnrollment
 
 from django.db.models.signals import post_save, post_delete
@@ -23,6 +24,16 @@ def clear_academics_cache(sender, instance, **kwargs):
     try :
         cache.delete_pattern(
             f"academics_{instance.school.id}_*"
+        )
+    except :
+        pass
+    
+@receiver(post_save, sender=PromotionLog)
+@receiver(post_delete, sender=PromotionLog)
+def clear_promotions_cache(sender, instance, **kwargs):
+    try :
+        cache.delete_pattern(
+            f"promotions_{instance.school_id}_{instance.session.name}"
         )
     except :
         pass

@@ -132,7 +132,7 @@ class PaymentInitiation(models.Model):
         return f"{self.payer} - {self.status}"
     
     def save(self, *args, **kwargs):
-
+ 
         if not self.ref_number:
             self.ref_number = generate_payment_reference(self.school.tag)
 

@@ -16,6 +16,8 @@ from academics.models import *
 import string
 import random
 from .custom_templates import CUSTOM_TEMPLATE_LIST
+from .custom_templates import ReportConfigStandard,ReportConfigPremium,ReportConfigGreenfield
+
 
 def generate_random_password(length=8):
     """Generate a random password with letters and digits"""
@@ -89,17 +91,39 @@ def clear_dashboard_cache(sender, instance, **kwargs):
 @receiver(post_save, sender=School)
 @receiver(post_delete, sender=School)
 def clear_dashboard_cache(sender, instance, **kwargs):
-        cache_key = f"school_{instance.id}_dashbord"
+        Templates.objects.bulk_create([
+            Templates(
+                school=instance,
+                type='Report',
+                name ="Standard Report",
+                config = ReportConfigStandard
+            ),
+            Templates(
+                school=instance,
+                type='Report',
+                name ="Premium Report",
+                config = ReportConfigPremium,
+                isActive =False
+            ),
+            Templates(
+                school=instance,
+                type='Report',
+                name ="Green Report",
+                config = ReportConfigGreenfield,
+                isActive =False
+            ),
+        ])
         try :
-            cache.delete(cache_key)
+            cache_key = f"school_{instance.id}_*"
+            cache.delete_pattern(cache_key)
         except :
             pass
         
 @receiver(post_save, sender=StudentClassEnrollment)
 @receiver(post_delete, sender=StudentClassEnrollment)
 def clear_dashboard_cache(sender, instance, **kwargs):
-        cache_key = f"school_{instance.student.school.id}_dashbord"
         try :
+            cache_key = f"school_{instance.student.school.id}_dashbord"
             cache.delete(cache_key)
         except :
             pass
@@ -110,6 +134,28 @@ def create_finance_settings(sender, instance, created ,**kwargs):
         FinanceSettings.objects.create(
             school=instance
         )
+        Templates.objects.bulk_create([
+            Templates(
+                school=instance,
+                type='Report',
+                name ="Standard Report",
+                config = ReportConfigStandard
+            ),
+            Templates(
+                school=instance,
+                type='Report',
+                name ="Premium Report",
+                config = ReportConfigPremium,
+                isActive =False
+            ),
+            Templates(
+                school=instance,
+                type='Report',
+                name ="Green Report",
+                config = ReportConfigGreenfield,
+                isActive =False
+            ),
+        ])
         Session.objects.bulk_create([
             Session(
                 school=instance,
@@ -163,8 +209,8 @@ def create_finance_settings(sender, instance, created ,**kwargs):
                     description = "Permission to view teacher information"
             ),
             SchoolPermission(
-                    school = instance,
-                    name = "can_add_teachers",
+                    school = instance, 
+                    name = "can_add_teachers", 
                     description = "Permission to add new teachers"
             ),
             SchoolPermission(
@@ -177,7 +223,6 @@ def create_finance_settings(sender, instance, created ,**kwargs):
                     name = "teachers_management",
                     description = "Permission to add authorise teachers"
             ),
-            
             
             SchoolPermission(
                     school = instance,
@@ -218,9 +263,9 @@ def create_finance_settings(sender, instance, created ,**kwargs):
                 ),
                 # managin finance permissions
                 SchoolPermission(
-                        school = instance,
-                        name = "can_manage_finance",
-                        description = "Permission to manage finance settings and transactions"
+                    school = instance,
+                    name = "can_manage_finance",
+                    description = "Permission to manage finance settings and transactions"
                 ),
                 # accepting or regecting payments 
                 SchoolPermission(
@@ -256,14 +301,10 @@ def create_finance_settings(sender, instance, created ,**kwargs):
             ),
             SchoolRole(
                 school = instance,
-                name = "Teacher",
-                description = "School teacher with limited permissions"
+                name = "Examination Officer",
+                description = "School examination officer with limited permissions"
             ),
-            SchoolRole(
-                school = instance,
-                name = "Staff",
-                description = "School staff with limited permissions"
-            ),
+            
             # accountaant 
             SchoolRole(
                 school = instance,
@@ -278,4 +319,22 @@ def create_finance_settings(sender, instance, created ,**kwargs):
             ),
         ])
         
-        
+@receiver(post_save, sender=SchoolSection)
+@receiver(post_delete, sender=SchoolSection)
+
+def clear_academics_cache(sender, instance, **kwargs):
+    try :
+        #for each school section created, create a permission for managing finance
+        SchoolPermission( 
+            school = instance,
+            name = f"{instance.name}_finance",
+            description = "Permission to manage finance settings and transactions"
+        ),
+        #for each school section created, create a permission for managing results
+        SchoolPermission( 
+            school = instance,
+            name = f"{instance.name}_results" ,
+            description = "Permission to manage results settings and transactions"
+        ),
+    except :
+        pass    

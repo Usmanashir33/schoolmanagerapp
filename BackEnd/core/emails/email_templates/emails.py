@@ -21,6 +21,16 @@ def generate_registration_email(email:str ,name: str, ) -> str:
         </p>
     """
     return base_email_template(content, title="Welcome to eduportal services !")
+def generate_result_compilation_email(teacher_name: str, class_name: str) -> str:
+    content = f"""
+        <p>Hello <strong>{teacher_name}</strong>,</p>
+        <p>✅ Good news! The result compilation for your class, <strong>{class_name}</strong>, is now successfully completed.</p>
+        <p>Kindly note:</p>
+        <p style="text-align:center; padding: 10px; background-color: #f9f9f9; border-radius: 5px;">
+            You can now log into your EduPortal dashboard to view, review, and process your students' final results.
+        </p>
+    """
+    return base_email_template(content, title=f"{class_name} Results Are Ready!")
 def generate_staff_role_assignment_email(
     name: str,
     role_name: str,

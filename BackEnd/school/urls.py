@@ -29,4 +29,9 @@ urlpatterns = [
     path('template/<str:school_id>/<str:template_id>/', SchoolTemplateView.as_view(), name='get&PutTemplate'), #Done
     path('template/<str:school_id>/<str:template_id>/<str:pin>/', SchoolTemplateView.as_view(), name='deleteTemplate'), #Done
     
+    #--------------------------------------------Teacher site -------------------------------------------
+    path('school-detail/teacher/<uuid:school_id>/', TeacherSchoolDetailView.as_view(), name='school-detail-teacher'),
+    
+    #--------------------------------------------Parent site -------------------------------------------
+    path('school-detail/parent/<uuid:school_id>/', ParentSchoolDetailView.as_view(), name='school-detail-parent'),
 ]  

@@ -14,13 +14,16 @@ class ClassRoomServices :
 
     @staticmethod
     @transaction.atomic
-    def promote_students(old_class,new_class, session,promotion_log) :
-        
-        enrollments = StudentClassEnrollment.objects.select_related (
+    @staticmethod
+    def promote_students(old_class, new_class, session, promotion_log):
+
+        enrollments = StudentClassEnrollment.objects.select_related(
             "student"
         ).filter(
-            class_room__id= old_class.id,
-            status__in = ["active", "enrolled"]
+            class_room=old_class,
+            status__in=["active", "enrolled"],
+        ).exclude(
+            session=session
         )
 
         promoted_count = 0
@@ -28,9 +31,9 @@ class ClassRoomServices :
         for enrollment in enrollments:
 
             existing = StudentClassEnrollment.objects.filter(
-                student_id=enrollment.student.id,
-                class_room__id =new_class.id,
-                session_id=session.id,
+                student=enrollment.student,
+                class_room=new_class,
+                session=session,
                 status__in=["active", "enrolled"]
             ).exists()
 
@@ -38,24 +41,25 @@ class ClassRoomServices :
                 continue
 
             enrollment.status = "promoted"
-            enrollment.save(
-                update_fields=["status"]
+            enrollment.save(update_fields=["status"])
+
+            StudentClassEnrollment.objects.create(
+                student=enrollment.student,
+                class_room=new_class,
+                session=session,
+                status="active"
             )
-            StudentClassEnrollment.objects.create( 
-                student_id=enrollment.student.id,
-                class_room__id=new_class.id,
-                session_id=session.id ,
-                status = "active"
-            )
+
             promoted_count += 1
-            promotion_log.promoted_students = promoted_count
-            promotion_log.save()
+
+        promotion_log.promoted_students = promoted_count
+        promotion_log.save(update_fields=["promoted_students"])
 
         return promoted_count
-    
+        
     @staticmethod
     @transaction.atomic
-    def transfer_students(students, to_class, from_class):
+    def transfer_students(students, to_class, from_class,session):
         student_ids = list(
             students.values_list("id", flat=True)
         )
@@ -78,7 +82,8 @@ class ClassRoomServices :
             StudentClassEnrollment(
                 student=student ,
                 class_room=to_class ,
-                status=status ,
+                status=status,
+                session=session,
             )
             for student in students
         ])
@@ -91,12 +96,13 @@ class ClassRoomServices :
     
     @staticmethod
     @transaction.atomic
-    def enroll_students(students,to_class): 
+    def enroll_students(students,to_class,session): 
         StudentClassEnrollment.objects.bulk_create(
             (
                 StudentClassEnrollment(
                     student=student,
                     class_room=to_class,
+                    session=session,
                     status="enrolled"
                 )
                 for student in students

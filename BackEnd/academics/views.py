@@ -44,7 +44,6 @@ class AcademicSettingsView (APIView) :
     
     def put(self, request, school_id) :
         try:
-            # validate director actions 
             pin = request.data.get('pin')
             if not request.user.pins.checkPin(pin) :
                 return Response({"error" : "Incorrect PIN"}, status=status.HTTP_200_OK)
@@ -61,7 +60,7 @@ class AcademicSettingsView (APIView) :
                 school_data = SchoolSerializer(school_inst).data
                 sessions = SessionSerializer(school.sessions.all(),many=True).data
                 terms = TermSerializer(school.terms.all(),many=True).data
-                 # send the email to director
+                 # send the email 
                 try:    
                     html_content = generate_school_update_email(
                         school.director.full_name , 
@@ -85,6 +84,7 @@ class AcademicSettingsView (APIView) :
     def post(self, request,school_id): # delting the school request 
         try:
             director = request.user.director
+            
             
             # ============= required fields ==============
             pin = request.data.get('pin')
@@ -144,7 +144,7 @@ class ClassEnrollmentView(APIView):
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             
-            valid_school = School.objects.filter(id=school_id).prefetch_related('students').first()
+            valid_school = School.objects.filter(id=school_id).prefetch_related("sessions").first()
             if not valid_school:
                 return Response({"error": "Invalid school  Entry"}, status=status.HTTP_200_OK)
             
@@ -163,15 +163,17 @@ class ClassEnrollmentView(APIView):
                 return Response({"error": "Invalid class selection"}, status=status.HTTP_200_OK)  
             
             # prevent duplication
-            students = valid_school.students.filter(id__in=students_ids).exclude(
+            students = Student.objects.filter(id__in=students_ids,school=valid_school).exclude(
                 Q(class_rooms__class_room__id = target_class_id) & Q(class_rooms__status__in = ['active','enrolled'])
             ).all()
+            
             if not students :
                 return Response({"error": "Invalid students Selection"}, status=status.HTTP_200_OK)  
-            
+            current_session = valid_school.sessions.filter(is_current =True).first()
             ClassRoomServices.enroll_students(
                 students,
                 to_class=to_class,
+                session=current_session,
             )
             
             # get latets data 
@@ -225,7 +227,7 @@ class ClassTransferView(APIView):
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             
-            valid_school = School.objects.filter(id=school_id).prefetch_related('students').first() 
+            valid_school = School.objects.filter(id=school_id).prefetch_related('sessions').first() 
             if not valid_school:
                 return Response({"error": "Invalid school Entry"}, status=status.HTTP_200_OK)
             
@@ -235,13 +237,13 @@ class ClassTransferView(APIView):
                 return Response({"error": "Invalid class / Already enrolled"}, status=status.HTTP_200_OK)  
             
             # prevent duplication and make sure all students are in current class and not in the target class
-            students_active_in_target = valid_school.students.filter(
+            students_active_in_target = Student.objects.filter(
                 id__in=students_ids,
                 class_rooms__class_room_id=target_class_id,
                 class_rooms__status__in=["active", "enrolled"]
             ).values_list("id",flat=True)
             
-            students = valid_school.students.filter(
+            students = Student.objects.filter(
                 id__in=students_ids,
                 class_rooms__class_room_id=current_class_id,
                 class_rooms__status__in=["active", "enrolled"]
@@ -251,11 +253,12 @@ class ClassTransferView(APIView):
                         
             if  not students :
                 return Response({"error": "Invalid students Selection"}, status=status.HTTP_200_OK)  
-            
+            current_session = valid_school.sesions.filter(is_current =True).first()
             ClassRoomServices.transfer_students(
                 students,
                 to_class=to_class,
                 from_class=from_class,
+                session= current_session
             )   
             # get latets data 
             clses = ClassRoom.objects.filter(
@@ -544,28 +547,27 @@ class ClassSubjectManagerView(APIView):
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)   
          
-class DirectorClassPromotionView(APIView):
+class ClassPromotionView(APIView):
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS] 
     
     def post(self, request):
-        # try:
+        try:
             pin = request.data.get( "pin" )
             school_id = request.data.get( "school")
             session_id = request.data.get("sessionId")
             mappings = request.data.get("mappings")
             
-            #--------------- validate director actions -------------------
-            director = request.user.director 
-            
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             
-            valid_school = School.objects.filter(director_id = director.id, id=school_id).first()
+            valid_school = School.objects.filter(id=school_id).prefetch_related(
+                "sessions",'terms'    
+            ).first()
             if not valid_school:
-                return Response({"error": "Invalid Director Entry"}, status=status.HTTP_200_OK)
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
             
-            session = Session.objects.filter( id=session_id, school=valid_school ).first() 
+            session = valid_school.sessions.filter(id=session_id, school=valid_school ).first() 
             if not session :
                 return Response({"error": "Invalid session"}, status=status.HTTP_200_OK) 
             
@@ -595,9 +597,41 @@ class DirectorClassPromotionView(APIView):
                     "error": f"Promotion Log Failed",
                 }, status=status.HTTP_200_OK )
                     
-        # except Exception as e :
-            # return Response({"error": "server error"}, status=status.HTTP_200_OK)   
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)   
             
+class SessionalPromotionLogsView(APIView):
+    permission_classes = [HasSchoolPermission]
+    required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS] 
+    
+    def get(self, request,school_id,session_name):   ## add new academic data
+        try:
+           
+            valid_school = School.objects.filter( id=school_id).prefetch_related('sessions').first()
+            if not valid_school:
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
+            session = valid_school.sessions.filter( name= session_name).prefetch_related('promotion_logs').first() or None
+            if not session:
+                return Response({"error": "Invalid Session"}, status=status.HTTP_200_OK)
+            
+            # find catched data before querying the database
+            cache_key = f"promotions_{school_id}_{session_name}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            logs = session.promotion_logs
+            data = PromotionLogSerializer(logs,many=True).data
+            resp = {'success':"promotions fetched","promotion_logs":data}
+            try :
+                cache.set(cache_key,resp,timeout=5*60)
+            except :
+                pass
+            return Response(resp, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": "server error"}, status=status.HTTP_200_OK)
 class AcademicDetailsView(APIView):
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_MANAGE_ACADEMICS] 
@@ -610,7 +644,7 @@ class AcademicDetailsView(APIView):
                 return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
             
             # find catched data before querying the database
-            cache_key = f"academics_{school_id}_{academic_item}_{item_id}"
+            cache_key = f"academics_{school_id}_{academic_item}_{item_id}_all"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
@@ -702,7 +736,6 @@ class AcademicView(APIView):
             valid_school = School.objects.filter( id=school_id).prefetch_related('sections', 'subjects').first()
             if not valid_school:
                 return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
-             #--------------- end  validate director actions -------------------
             
             #---------------------------SECTION CREATION -------------------
             if academic_item == "sections":
@@ -938,13 +971,13 @@ class AcademicView(APIView):
                 user_room = f"room{request.user.id}"
                 log_data = ActivityLogSerializer(new_log).data
                 data = {
-                        "type": "send_response1",
-                        "activity_log": log_data,
-                        }
+                    "type": "send_response1",
+                    "activity_log": log_data,
+                }
                 try:
-                        SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
                 except :
-                        pass
+                    pass
                 return Response({
                 "success": "Classroom deleted successfully",
                 "deleted_classroom": {"id":item_id}
@@ -977,7 +1010,7 @@ class AcademicView(APIView):
                         "activity_log": log_data,
                         }
                 try:
-                        SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                    SchoolServices.send_activity_log.delay(destination=user_room, data=data)
                 except :
                         pass
                 return Response({

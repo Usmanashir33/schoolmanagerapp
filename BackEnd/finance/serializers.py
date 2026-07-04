@@ -1,9 +1,5 @@
 
 from rest_framework import serializers
-from academics.serializers import ClassRoomDetailSerializer
-from staff.models import Staff , ActivityRole
-from core.serializers import BankSerializer 
-from authUser.serializers import MiniUserSerializer
 import json 
 from django.db import transaction
 from .models import ClassFeeSetting, PaymentInitiation,StudentTransaction
@@ -20,10 +16,6 @@ class SchoolFeeSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
 
-    # def get_classIds(self, obj):
-    #     classes = ClassRoomDetailSerializer(obj.class_rooms.all(), many=True).data
-    #     return classes if classes else []
-    
     def create(self, validated_data):
         request = self.context["request"]
         class_rooms = request.data.get("classIds", [])
@@ -142,46 +134,6 @@ class PaymentInitiationSerializer(serializers.ModelSerializer):
             payment = PaymentInitiation.objects.create(**validated_data)
             payment.students.set(students)
             return payment
-    
-    # def update(self, instance, validated_data):
-    #     request = self.context["request"]
-    #     class_ids = request.data.get("classIds", None)
-
-    #     with transaction.atomic():
-    #         school = validated_data.get("school", instance.school)
-    #         name = validated_data.get("name", instance.name)
-
-    #         # ✅ Update basic fields first
-    #         for attr, value in validated_data.items():
-    #             setattr(instance, attr, value)
-    #         instance.save()
-
-    #         # ✅ If classIds is provided → update relations
-    #         if class_ids is not None:
-    #             classes = ClassRoom.objects.filter(
-    #                 id__in=class_ids,
-    #                 section__school=school
-    #             )
-
-    #             if not classes.exists():
-    #                 raise serializers.ValidationError({
-    #                     "classIds": "No valid classes found for this school."
-    #                 })
-
-    #             # ✅ EXCLUDE current instance (KEY DIFFERENCE FROM CREATE)
-    #             existing = ClassFeeSetting.objects.filter(
-    #                 class_rooms__in=classes,
-    #                 school=school,
-    #                 # name = name 
-    #             ).exclude(id=instance.id) 
-    #             if existing:
-    #                 raise serializers.ValidationError({
-    #                     "classIds": f"Some classes already have fee settings: {list(existing)}"
-    #                 })
-    #             # ✅ Replace relationships (handles add/remove automatically)
-    #             instance.class_rooms.set(classes)
-
-    #         return instance
         
 class ClassConfiguredSerializer(serializers.ModelSerializer) :
     configInfo = serializers.SerializerMethodField(read_only = True)

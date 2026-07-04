@@ -120,8 +120,6 @@ class ClassCurrentTeachersListView(APIView):
             return Response(resp, status=status.HTTP_200_OK)
         except Exception as e :
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
-        
-
 class FilterTeacherDetailView(APIView):
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_VIEW_TEACHERS]
@@ -372,7 +370,6 @@ class TeacherRecordView(APIView):
             return Response({"error": "Record faild!"}, status=status.HTTP_200_OK)
         except:
             return Response({"error": "server error"}, status=status.HTTP_200_OK)
-        
 class TeacherAdministrationView(APIView):
     permission_classes = [HasSchoolPermission]
     required_permissions = [SchoolPermissions.CAN_MANAGE_TEACHERS]

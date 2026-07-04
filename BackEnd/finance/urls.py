@@ -1,4 +1,6 @@
 from django.urls import path
+
+from .parent_view import ParentPaymentsView, ParentStudentPaymentView, ParentStudentPaymentView
 from .views import * 
 urlpatterns = [
     path('dashbord/<uuid:school_id>/<str:session>/<str:term>/<str:type>/', FinanceDashbordView.as_view(), name='director_dashbord'), # Done enhencement
@@ -9,12 +11,16 @@ urlpatterns = [
     path('school-fee-settings/create/', SchoolFeeSettingsView.as_view(), name='create-school-fee-settings'), #Done
     path('school-fee-settings/update/<str:fee_id>/', SchoolFeeSettingsView.as_view(), name='update-school-fee-settings'), #Done
     path('school-fee-settings/delete/<str:school_id>/<str:fee_id>/<str:pin>/', SchoolFeeSettingsView.as_view(), name='delete-school-fee-settings'), #Done
+    path('payments/create/', StudentPaymentView.as_view(), name='payments'), #Done
     
-    path('get-payment-records/<str:school_id>/<str:payment_id>/', StudentPaymentView.as_view(), name='get_payment_records'), #Done
-    path('payments/create/', StudentPaymentOnlyStaffView.as_view(), name='payments'), #Done
+    path('get-payment-records/<str:school_id>/<str:payment_id>/', StudentPaymentDetailsView.as_view(), name='get_payment_records'), #Done
     path('payment-records/<str:school_id>/', PendingPaymentsView.as_view(), name='payment_records'), #Done
     path('trxs/student-ledger/<str:school_id>/<str:student_id>/', StudentLedgerView.as_view(), name='student_ledger'),#Done
     
     path('search/payments/<str:school_id>/<str:ref_number>/', SearchPaymentView.as_view(), name='payment'),# Done
+    #--------------------------------------------Parent site -------------------------------------------
+    
+    path('payment-records-by-parent/<str:school_id>/', ParentPaymentsView.as_view(), name='payment_records'), #Done
+    path('payments/create-by-parent/', ParentStudentPaymentView.as_view(), name='payments'), #Done
     
 ]

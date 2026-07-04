@@ -41,7 +41,6 @@ def send_promotion_update(promotion_log):
 @shared_task(bind=True, max_retries=3)
 def promote_students_task(self, mappings, session_id, log_id):
     promotion_log = None
-
     try:
 
         # fetch promotion log
@@ -88,10 +87,10 @@ def promote_students_task(self, mappings, session_id, log_id):
             from_id = item.get("fromClassId")
             to_id = item.get("toClassId")
 
-            if from_id:
+            if from_id and from_id not in class_ids:
                 class_ids.append(from_id)
 
-            if to_id:
+            if to_id and to_id not in class_ids:
                 class_ids.append(to_id)
 
         classrooms = {
@@ -119,14 +118,13 @@ def promote_students_task(self, mappings, session_id, log_id):
             # validate classrooms
             if not old_class or not new_class:
                 logger.warning(
-                    f"Invalid classroom mapping: "
+                    f"Invalid classroom mappings: "
                     f"{old_class_id} -> {new_class_id}"
                 )
                 continue
 
             # atomic batch processing
             with transaction.atomic():
-
                 promoted = ClassRoomServices.promote_students(
                     old_class,
                     new_class,
@@ -134,7 +132,7 @@ def promote_students_task(self, mappings, session_id, log_id):
                     promotion_log
                 )
 
-            if promoted:
+            if promoted :
                 promoted_count += promoted
 
             batch_count += 1

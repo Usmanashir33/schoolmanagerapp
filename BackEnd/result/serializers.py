@@ -3,7 +3,7 @@ from rest_framework import serializers
 from  academics.models import ClassRoom,Subject
 from   school.models import School, Session, Term
 from  student.models import Student, Student, StudentClassEnrollment
-from  .models import ResultBatch, StudentResult,ReportSheet,StudentCharacterSkill,CharacterBatch,ApprovalRecord
+from  .models import *
 from teacher.models import Teacher
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -16,18 +16,33 @@ from school.serializers import SessionSerializer,TermSerializer,TemplatesSeriali
 
 class StudentCharacterSkillSerializer(serializers.ModelSerializer):
     studentId = serializers.PrimaryKeyRelatedField(source='student.id', read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    student_admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     class Meta:
         model = StudentCharacterSkill
         fields = "__all__"
         
-class SkillBatchReadSerializer(serializers.ModelSerializer):
-    
+class SkillBatchReadDetailSerializer(serializers.ModelSerializer):
     charAndSkills = StudentCharacterSkillSerializer(many=True)
     isUploaded = serializers.BooleanField(source='is_uploaded', read_only=True)
     isLocked  = serializers.BooleanField(source='is_locked', read_only=True)
     isUpdated = serializers.BooleanField(source='last_updated', read_only=True)
     lastUpdated = serializers.DateTimeField(source='last_updated', read_only=True)
     classId   = serializers.PrimaryKeyRelatedField(source='class_room', read_only=True)
+    totalStudents   = serializers.IntegerField(source='total_students', read_only=True)
+    markedStudents   = serializers.IntegerField(source='marked_students', read_only=True)
+    
+    class Meta:
+        model = CharacterBatch
+        fields = "__all__"
+class SkillBatchReadListSerializer(serializers.ModelSerializer):
+    isUploaded = serializers.BooleanField(source='is_uploaded', read_only=True)
+    isLocked  = serializers.BooleanField(source='is_locked', read_only=True)
+    isUpdated = serializers.BooleanField(source='last_updated', read_only=True)
+    lastUpdated = serializers.DateTimeField(source='last_updated', read_only=True)
+    classId   = serializers.PrimaryKeyRelatedField(source='class_room', read_only=True)
+    totalStudents   = serializers.IntegerField(source='total_students', read_only=True)
+    markedStudents   = serializers.IntegerField(source='marked_students', read_only=True)
     
     class Meta:
         model = CharacterBatch
@@ -35,6 +50,8 @@ class SkillBatchReadSerializer(serializers.ModelSerializer):
         
 class StudentCharacterWriteSkillSerializer(serializers.Serializer):
     studentId = serializers.UUIDField()
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    student_admission_number = serializers.CharField(source="student.admission_number", read_only=True)
 
     punctuality = serializers.FloatField(required=False, default=3)
     honesty = serializers.FloatField(required=False, default=3)
@@ -123,6 +140,9 @@ class ResultBatchUpsertSerializer(serializers.Serializer):
     term = serializers.UUIDField()
     teacher = serializers.UUIDField()
     isUploaded = serializers.BooleanField(default=False)
+    totalStudents   = serializers.IntegerField(source='total_students', read_only=True)
+    markedStudents   = serializers.IntegerField(source='marked_students', read_only=True)
+    
     
     scores = StudentResultWriteSerializer(many=True)
     def __init__(self, *args, **kwargs):
@@ -142,13 +162,13 @@ class ResultBatchUpsertSerializer(serializers.Serializer):
             terms__id=validated_data["term"],
             sessions__id=validated_data["session"],
             teachers__id=validated_data["teacher"],
-        ).prefetch_related("teachers",'subjects','classrooms','sessions','terms').first()
+        ).prefetch_related('subjects','classrooms','sessions','terms').first()
         
         if not school:
             raise serializers.ValidationError(f"School with this details does not exist.")
         
         teacher_id = validated_data.get("teacher")
-        teacher = school.teachers.filter(id=teacher_id).first() if teacher_id else None
+        teacher = Teacher.objects.filter(school=school,id=teacher_id).first() if teacher_id else None
         
         # validate subject also
         subject = school.subjects.filter(id=validated_data["subject"]).first()
@@ -179,26 +199,26 @@ class ResultBatchUpsertSerializer(serializers.Serializer):
             defaults = {"teacher": teacher}
         )
         batch.is_uploaded = True 
-        batch.approved = False 
+        batch.approved = False
         # validate if batch is not locked before allowing updates
         if batch.is_locked or batch.on_submit or batch.approved:
             raise serializers.ValidationError("This batch cannot be modified.")
         
         
         batch.save()
-        
+        school_students = school.students.all()
+        existing_results = {
+            result.student.id : result
+            for result in batch.scores.all()
+        }
         # 🔒 Validate Students Belong to Class
         class_students = set(
             StudentClassEnrollment.objects.filter(
                 class_room=batch.class_room,
                 status__in=['active', 'enrolled'],
-            ).values_list('student__id', flat=True)
+                session = session
+            ).order_by('student_id').distinct('student_id').values_list('student_id', flat=True)
         )
-        
-        existing_results = {
-            result.student.id : result
-            for result in batch.scores.all()
-        }
         
         for result_data in results_data:
             submitted =  (result_data.get("ca1Abs", False) == True) or (result_data.get("ca2Abs", False) == True) or (result_data.get("examAbs", False) == True)
@@ -207,6 +227,7 @@ class ResultBatchUpsertSerializer(serializers.Serializer):
             # 🚨 Prevent fake student injection
             if student_id not in class_students:
                 continue # pass silently
+            
             total = ( 
                 float(result_data.get("ca1", 0)) +
                 float(result_data.get("ca2", 0)) + 
@@ -223,12 +244,12 @@ class ResultBatchUpsertSerializer(serializers.Serializer):
                 obj.ca2Abs = result_data.get("ca2Abs",obj.ca2Abs)
                 obj.examAbs = result_data.get("examAbs",obj.examAbs)
                 obj.total = total
-                obj.is_submitted = (total > 0.0 or submitted)
+                obj.is_submitted = ((total > 0.0) or submitted)
                 obj.save()
 
             # ✅ If not exists → create
             else:
-                student = school.students.filter(id=student_id).first()
+                student = school_students.get(id=student_id) or None 
                 if not student:
                     raise serializers.ValidationError(f"Student with id {student_id} does not exist.")
                 StudentResult.objects.create(
@@ -250,13 +271,13 @@ class ResultBatchUpsertSerializer(serializers.Serializer):
         filled_results = batch.scores.filter(is_submitted = True).count()
         if filled_results == 0 :
             batch.status = "EMPTY"
-            batch.save()
-            return batch
             
         if filled_results < total_students:
             batch.status = "PARTIAL"
         else:
             batch.status = "COMPLETE"
+        batch.total_students  = total_students
+        batch.marked_students = filled_results
         batch.save()
         return batch
 
@@ -268,6 +289,9 @@ class StudentCharAndSkillsUpsertSerializer(serializers.Serializer):
     
     charAndSkills = StudentCharacterWriteSkillSerializer(many = True)
     isUploaded = serializers.BooleanField(default=False) 
+    totalStudents   = serializers.IntegerField(source='total_students', read_only=True)
+    markedStudents   = serializers.IntegerField(source='marked_students', read_only=True)
+    
     
     
     @transaction.atomic
@@ -279,7 +303,7 @@ class StudentCharAndSkillsUpsertSerializer(serializers.Serializer):
             terms__id=validated_data["term"],
             sessions__id=validated_data["session"],
         ).prefetch_related(
-        "terms",'sessions'    ,'classrooms'
+        "terms",'sessions','classrooms'
         ).first()
         
         if not school:
@@ -299,13 +323,6 @@ class StudentCharAndSkillsUpsertSerializer(serializers.Serializer):
         session = school.sessions.filter(id=validated_data["session"]).first()
         if not session:
             raise serializers.ValidationError(f"Session with id {validated_data['session']} does not exist.")
-        
-        # 🔒 Validate Students Belong to Class
-        class_students = school.students.filter(
-            class_rooms__class_room__id = class_room.id,
-            class_rooms__status__in=['active', 'enrolled'] ,
-        )
-        
         # 🔒 Get or Create Batch
         batch, created = CharacterBatch.objects.get_or_create( 
             class_room=class_room,
@@ -320,13 +337,19 @@ class StudentCharAndSkillsUpsertSerializer(serializers.Serializer):
             raise serializers.ValidationError("This batch cannot be modified.")
         
         batch.save()
+        # school_students = school.students.all()
         
-        
+        # 🔒 Validate Students Belong to Class
+        class_students = Student.objects.filter(
+            class_rooms__class_room=batch.class_room,
+            class_rooms__status__in=['active', 'enrolled'],
+            class_rooms__session = session
+        )
         
         # chars = []
         for result_data in charAndSkills:
             student_id = result_data["studentId"]
-            student = class_students.filter(id=student_id).first()
+            student = class_students.get(id=student_id) or None
             submitted = False 
             if not student:
                 continue  # skip fake injection safely
@@ -371,11 +394,14 @@ class StudentCharAndSkillsUpsertSerializer(serializers.Serializer):
             batch.status = "EMPTY"
         else :
             batch.status = "PARTIAL"
+        batch.total_students  = students_count
+        batch.marked_students = students_with_record
         batch.save()
         return batch 
     
 class StudentResultReadSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.full_name", read_only=True)
+    student_admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     studentId = serializers.PrimaryKeyRelatedField(source='student', read_only=True)
     subject_name = serializers.PrimaryKeyRelatedField(source='batch.subject.name', read_only=True)
     subject_code = serializers.PrimaryKeyRelatedField(source='batch.subject.code', read_only=True)
@@ -383,14 +409,16 @@ class StudentResultReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StudentResult
-        fields = ["id","studentId","student_name","subject_name","subject_code","subject_credits","ca1", "ca1Abs","ca2",'ca2Abs', "exam",'examAbs', "total",'grade','remark']
+        fields = ["id","studentId","student_name","subject_name","student_admission_number","subject_code","subject_credits","ca1", "ca1Abs","ca2",'ca2Abs', "exam",'examAbs', "total",'grade','remark']
 
-class ResultBatchReadSerializer(serializers.ModelSerializer):
+class ResultBatchReadListSerializer(serializers.ModelSerializer):
     
-    scores    = StudentResultReadSerializer(many=True)
+    # scores    = StudentResultReadSerializer(many=True)
     teacherId = serializers.PrimaryKeyRelatedField(source='teacher', read_only=True)
     subjectId = serializers.PrimaryKeyRelatedField(source='subject', read_only=True)
     classId   = serializers.PrimaryKeyRelatedField(source='class_room', read_only=True)
+    totalStudents   = serializers.IntegerField(source='total_students', read_only=True)
+    markedStudents   = serializers.IntegerField(source='marked_students', read_only=True)
     isUploaded = serializers.BooleanField(source='is_uploaded', read_only=True)
     isLocked  = serializers.BooleanField(source='is_locked', read_only=True)
     isUpdated = serializers.BooleanField(source='last_updated', read_only=True)
@@ -398,10 +426,30 @@ class ResultBatchReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ResultBatch
+        fields = "__all__" 
+class ResultBatchReadSerializer(serializers.ModelSerializer):
+    
+    scores    = StudentResultReadSerializer(many=True)
+    teacherId = serializers.PrimaryKeyRelatedField(source='teacher', read_only=True)
+    subjectId = serializers.PrimaryKeyRelatedField(source='subject', read_only=True)
+    classId   = serializers.PrimaryKeyRelatedField(source='class_room', read_only=True)
+    totalStudents   = serializers.IntegerField(source='total_students', read_only=True)
+    markedStudents   = serializers.IntegerField(source='marked_students', read_only=True)
+    
+    isUploaded = serializers.BooleanField(source='is_uploaded', read_only=True)
+    isLocked  = serializers.BooleanField(source='is_locked', read_only=True)
+    isUpdated = serializers.BooleanField(source='last_updated', read_only=True)
+    lastUpdated = serializers.DateTimeField(source='last_updated', read_only=True)
+
+    class Meta:
+        model = ResultBatch
+        fields = "__all__" 
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReportRecord
         fields = "__all__"
-
-
-
 class ReportSheetDetailSerializer(serializers.ModelSerializer):
     student = MiniStudentSerializer(read_only = True)
     scores = serializers.SerializerMethodField(read_only=True)

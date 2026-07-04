@@ -40,7 +40,7 @@ def clear_payment_cache(sender, instance, **kwargs):
             f"financedashbordstudenttrxs_{instance.school.id}_*"
         )
         cache.delete_pattern(
-            f"pendingpayments_{instance.school.id}"
+            f"pendingpayments_{instance.school.id}_*"
         )
         cache.delete_pattern(
             f"studentLedger_{instance.school.id}_*"

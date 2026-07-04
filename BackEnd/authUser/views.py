@@ -145,7 +145,7 @@ class RetriveOrGenOTPView(APIView) :
                     if operation_mode :
                         email_verification_code = generate_5_otp()
                         
-                    elif not user.verificationcode.is_expired() :
+                    elif user.verificationcode.code and  not user.verificationcode.is_expired() :
                         email_verification_code = user.verificationcode.code
                         
                     else :

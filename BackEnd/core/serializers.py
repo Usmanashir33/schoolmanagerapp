@@ -1,15 +1,24 @@
 from rest_framework import serializers
 
+from finance.serializers import StudentsTrxsSerializer
 from school.models import School,SchoolDeleteRequest
 from school.serializers import TermSerializer, SessionSerializer
 from academics.serializers import MiniClassRoomSerializer,MiniSchoolSectionSerializer,SubjectSerializer
 from student.models import Student,StudentClassEnrollment
+from student.serializers import MiniStudentSerializer
 from teacher.models import Teacher
 from director.models import Director
 from parent.models import Parents 
 from staff.models import Staff
 from core .models import BankDetails 
 from authUser.serializers import MiniUserSerializer
+
+from django.db.models import FloatField, Sum, DecimalField ,Q ,OuterRef, Subquery
+from django.db.models.functions import Coalesce
+import json 
+from finance.models import ClassFeeSetting, PaymentInitiation ,StudentTransaction
+
+
 
 class BankSerializer(serializers.ModelSerializer) : 
     class Meta:  
@@ -19,12 +28,92 @@ class BankSerializer(serializers.ModelSerializer) :
         
  
 class SchoolDeleteRequestSerialzer(serializers.ModelSerializer):
-    # classrooms = MiniClassRoomSerializer(many=True, read_only=True)
     class Meta:  
         model = SchoolDeleteRequest
         fields ='__all__'
         read_only_fields = ['id', 'requested_at']  
 
+class ParentSchoolSerializer(serializers.ModelSerializer):
+    logo = serializers.SerializerMethodField(read_only =True)
+    dashboardData = serializers.SerializerMethodField(read_only =True)
+    sections = MiniSchoolSectionSerializer(many=True, read_only=True) # sections full 
+    classrooms =   MiniClassRoomSerializer(many=True, read_only =  True) # classroom full data
+    subjects = SubjectSerializer(many=True, read_only =  True)
+    terms = TermSerializer(read_only=True,many=True)
+    sessions = SessionSerializer(read_only=True,many=True)
+    delete_requests = SchoolDeleteRequestSerialzer(read_only = True)
+    
+    class Meta:  
+        model = School
+        fields ='__all__'
+        read_only_fields = ['id', 'joined_at','ref_id']
+        write_only_fields = ['director']
+    
+    def get_logo(self, obj):
+        return obj.logo.url if obj.logo else None
+    
+    def get_dashboardData(self, obj):
+        # this will handle finance and academics data for parent dashbord
+            student_ids = obj.students.values_list('id',flat=True)
+            strxs = StudentTransaction.objects.filter( 
+                student__school_id = obj.id,
+                student_id__in = student_ids
+            ).select_related(
+                'student','payment_source'
+            )
+            
+            latest_trx_subquery = (
+                StudentTransaction.objects
+                .filter(
+                    student=OuterRef("student"), 
+                    student_id__in = student_ids
+                )
+                .order_by("-created_at")
+            )
+
+            latest_trxs = StudentTransaction.objects.filter(
+                id=Subquery(latest_trx_subquery.values("id")[:1]),
+                student_id__in = student_ids
+
+            )
+
+            total_net_bal = latest_trxs.aggregate(
+                total_balance=Sum("net_balance")
+            )["total_balance"] 
+            
+            total_paid = strxs.filter(transaction_type  = 'PAYMENT')
+            tp = total_paid.aggregate(
+                total=Coalesce(Sum('amount_paid'), 0,output_field=DecimalField())
+            )
+            paid_count = total_paid.distinct('student_id').count()
+            return ({
+                "totalNetBalance" : total_net_bal ,
+                "totalPaid" : tp['total'],
+                "paidCount" : paid_count,
+                
+                "totalStudents" : obj.students.count(),
+                'totalGirls' : obj.students.filter(gender = 'female').count(),
+                'totalBoys' : obj.students.filter(gender = 'male').count(),
+            })
+           
+            
+class TeacherSchoolSerializer(serializers.ModelSerializer):
+    logo = serializers.SerializerMethodField(read_only =True)
+    sections = MiniSchoolSectionSerializer(many=True, read_only=True) # sections full 
+    classrooms =   MiniClassRoomSerializer(many=True, read_only =  True) # classroom full data
+    subjects = SubjectSerializer(many=True, read_only =  True)
+    terms = TermSerializer(read_only=True,many=True)
+    sessions = SessionSerializer(read_only=True,many=True)
+    delete_requests = SchoolDeleteRequestSerialzer(read_only = True)
+    
+    class Meta:  
+        model = School
+        fields ='__all__'
+        read_only_fields = ['id', 'joined_at','ref_id']
+        write_only_fields = ['director']
+    
+    def get_logo(self, obj):
+        return obj.logo.url if obj.logo else None
 class DirectorSchoolSerializer(serializers.ModelSerializer):
     logo = serializers.SerializerMethodField(read_only =True)
     sections = MiniSchoolSectionSerializer(many=True, read_only=True) # sections full 
@@ -89,7 +178,6 @@ class DirectorSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)
     directorschools = DirectorSchoolSerializer(many=True, read_only=True)
     def get_picture(self, obj):
-
         return obj.picture.url if obj.picture else None
     class Meta:  
         model = Director 
@@ -97,9 +185,9 @@ class DirectorSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'joined_at']
 
 # --------- Teacher Role  ------------------  
-class TeacherSerializer(serializers.ModelSerializer): 
+class TeacherSerializer(serializers.ModelSerializer) : 
     user = MiniUserSerializer(read_only=True)
-    # school = SchoolSerializer()
+    school = TeacherSchoolSerializer(read_only=True) 
     class Meta:  
         model = Teacher 
         fields ='__all__'
@@ -124,8 +212,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
 class ParentsSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)
-    # schools = SchoolSerializer(many=True, read_only=True)
-    students = StudentSerializer(read_only=True)
+    school = ParentSchoolSerializer(read_only=True)
     class Meta:
         model = Parents
         fields = '__all__'

@@ -60,6 +60,9 @@ class ResultBatch(models.Model):
     last_updated = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    total_students = models.IntegerField(blank=True,default=0)
+    marked_students = models.IntegerField(blank=True,default=0)
+    
 
     class Meta:
         unique_together = (
@@ -124,7 +127,27 @@ class StudentResult(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.batch}"
+class ReportRecord(models.Model):
+    STATUS_CHOICES = (
+        ("PENDING", "Pending"),
+        ("GENERATING", "Generating"),
+        ("GENERATED", "Generated"),
+        ("FAILED", "Failed"),
+    )
 
+    school = models.ForeignKey(School, on_delete=models.CASCADE,related_name='report_records')
+    class_room = models.ForeignKey(ClassRoom, on_delete=models.SET_NULL,null=True,related_name='report_records')
+    term = models.ForeignKey(Term, on_delete=models.SET_NULL,null=True,related_name='report_records')
+    session = models.ForeignKey(Session, on_delete=models.SET_NULL,null=True,related_name='report_records')
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="PENDING"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 class ReportSheet(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="report_sheets")
     
@@ -153,8 +176,6 @@ class ReportSheet(models.Model):
         null=True,
         db_index=True,
     )
-    
-
     def __str__(self):
         return f"{self.student} - {self.term} - {self.total_marks} - {self.position} Report"
     
@@ -180,6 +201,8 @@ class CharacterBatch (models.Model) :
         ],
         default="EMPTY",
     )
+    total_students = models.IntegerField(blank=True,default=0)
+    marked_students = models.IntegerField(blank=True,default=0)
 
     class Meta :
         unique_together = (

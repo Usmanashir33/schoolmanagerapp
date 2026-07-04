@@ -13,11 +13,11 @@ from core.emails.email_templates.emails import generate_otp_email,generate_login
 from core.emails.email_templates.emails import generate_school_update_email,generate_school_delete_email
 from core.tasks import send_html_email,send_ordinary_sms
 
-from core.permissions import DirectorUserPermission
+from core.permissions import DirectorUserPermission, ParentPermissionDenied,TeacherUserPermission,ParentUserPermission
 from core.formatters import format_serializer_errors
 
 
-from core.serializers import DirectorSchoolSerializer,DirectorSerializer
+from core.serializers import *
 from rest_framework.views import APIView
 from rest_framework import permissions
 from rest_framework import status
@@ -269,6 +269,145 @@ class SchoolAndDirectorCreateView(APIView) :
 #                                       SCHOOL  SECTION                           
 #==================================================================================================
 
+class ParentSchoolDetailView(APIView):
+    permission_classes=[
+        permissions.IsAuthenticated,
+        ParentUserPermission,
+    ]
+    def get(self, request,school_id): # get school data 
+        try:
+            # limited to 15  recordes    per model tjo avoid overloading the response and client side
+            user = request.user
+            cache_key = f"school_{school_id}_dashbord_parent_{user.id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    pass
+                    # return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            school_data = School.objects.filter(id=school_id).prefetch_related(
+                    'finance',
+                    Prefetch(
+                        "sections",
+                        queryset=SchoolSection.objects.filter(
+                        ).order_by("name").distinct('name')
+                    ),
+                    Prefetch(
+                        "subjects",
+                        queryset=Subject.objects.filter(
+                        ).prefetch_related("teaching_assignments").order_by("name").distinct('name')
+                    ),
+                    Prefetch(
+                        "classrooms",
+                        queryset=ClassRoom.objects.filter(
+                        ).prefetch_related("teaching_assignments").order_by("name").distinct('name')
+                    ),
+                    Prefetch(
+                        "templates",
+                        queryset=Templates.objects.order_by("-created_at")
+                    ),
+                    Prefetch(
+                        "students",
+                        queryset=Student.objects.filter(
+                            guardian__user_id = request.user.id
+                        )
+                    ),
+                    Prefetch(
+                        "class_fee_settings",
+                        queryset=ClassFeeSetting.objects.order_by("-created_at")
+                    ),
+                    Prefetch(
+                        "activity_logs",
+                        queryset=ActivityLog.objects.filter(user_id = user.id).order_by("-created_at")
+                    ),
+                ).first()
+            
+            if not school_data :
+                return Response({"error":"school not found "},status=status.HTTP_200_OK)
+            resp = { 
+                "success":'school_data', 
+                
+                "school_and_academics" : ParentSchoolSerializer(school_data).data, 
+                "school_students" : StudentSerializer(school_data.students.all(),many=True).data,
+                "templates" : TemplatesSerializer(school_data.templates,many=True).data,
+                "activity_logs" : ActivityLogSerializer(school_data.activity_logs.all()[:15],many=True).data,
+                "finance" : FinanceSettingsSerializer(school_data.finance).data ,
+                "class_fee_settings" : SchoolFeeSerializer(school_data.class_fee_settings,many=True).data,
+                
+                }
+            try :
+                cache.set(cache_key,resp,timeout=60*3) # Cache for 3 minutes)
+            except:
+                pass
+            return Response(resp , status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK)
+class TeacherSchoolDetailView(APIView) :
+    permission_classes=[
+        permissions.IsAuthenticated,
+        TeacherUserPermission,
+    ]
+    def get(self, request,school_id): # get school data 
+        try:
+            # limited to 15  recordes    per model tjo avoid overloading the response and client side
+            user = request.user
+            cache_key = f"school_{school_id}_dashbord_teacher_{user.id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    # pass
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            school_data = School.objects.filter(id=school_id).prefetch_related(
+                    'finance',
+                    Prefetch(
+                        "sections",
+                        queryset=SchoolSection.objects.filter(
+                            classrooms__teaching_assignments__teacher__user_id = user.id
+                        ).order_by("name").distinct('name')
+                    ),
+                    Prefetch(
+                        "subjects",
+                        queryset=Subject.objects.filter(
+                            teaching_assignments__teacher__user_id = user.id
+                        ).prefetch_related("teaching_assignments").order_by("name").distinct('name')
+                    ),
+                    Prefetch(
+                        "classrooms",
+                        queryset=ClassRoom.objects.filter(
+                            Q(teaching_assignments__teacher__user_id = user.id) | Q(form_teacher__user_id = user.id)
+                        ).prefetch_related("teaching_assignments").order_by("name").distinct('name')
+                    ),
+                    
+                    Prefetch(
+                        "templates",
+                        queryset=Templates.objects.order_by("-created_at")
+                    ),
+                    Prefetch(
+                        "activity_logs",
+                        queryset=ActivityLog.objects.filter(user_id = user.id).order_by("-created_at")
+                    ),
+                ).first()
+            
+            if not school_data :
+                return Response({"error":"school not found "},status=status.HTTP_200_OK)
+            resp = { 
+                "success":'school_data', 
+                
+                "school_and_academics" : TeacherSchoolSerializer(school_data).data, 
+                "templates" : TemplatesSerializer(school_data.templates,many=True).data,
+                "activity_logs" : ActivityLogSerializer(school_data.activity_logs.all()[:15],many=True).data,
+                "finance" : FinanceSettingsSerializer(school_data.finance).data ,
+                }
+            try :
+                cache.set(cache_key,resp,timeout=60*3) # Cache for 3 minutes)
+            except:
+                pass
+            return Response(resp , status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK)
 class DirectorSchoolDetailView(APIView) :
     permission_classes=[
         permissions.IsAuthenticated,
@@ -276,7 +415,7 @@ class DirectorSchoolDetailView(APIView) :
     ]
     def get(self, request,school_id): # get school data 
         try:
-            # limited to 15  recordes    per model to avoid overloading the response and client side
+            # limited to 15  recordes    per model tjo avoid overloading the response and client side
             cache_key = f"school_{school_id}_dashbord"
             try :
                 cached_response = cache.get(cache_key)
@@ -297,7 +436,7 @@ class DirectorSchoolDetailView(APIView) :
                     
                     Prefetch(
                         "promotion_logs",
-                        queryset=PromotionLog.objects.order_by("-created_at")
+                        queryset=PromotionLog.objects.filter(session__is_current = True).order_by("-created_at")
                     ),
                     Prefetch(
                         "students",
@@ -329,7 +468,6 @@ class DirectorSchoolDetailView(APIView) :
                         queryset=ActivityLog.objects.filter(user_id = request.user.id).order_by("-created_at")
                     ),
                 ).first()
-            end = timezone.now()
             if not school_data :
                 return Response({"error":"school not found "},status=status.HTTP_200_OK)
             resp = { 
@@ -475,7 +613,6 @@ class SchoolDetailView(APIView) :
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK) 
         
-
 class AllUserLogsView(APIView): #paginated request
     # permission_classes = [HasSchoolPermission]
     # required_permissions = [SchoolPermissions.CAN_VIEW_STAFFS]
@@ -842,8 +979,7 @@ class SchoolTemplateView(APIView) :
                 serializer.save()
                 return Response({"template":serializer.data}, status=status.HTTP_200_OK)
         except:
-            return Response({"error":"server error"},status=status.HTTP_200_OK) 
-        
+            return Response({"error":"server error"},status=status.HTTP_200_OK)      
 class SchoolFinanceView(APIView) :
     permission_classes=[HasSchoolPermission]
     permissions_required = [

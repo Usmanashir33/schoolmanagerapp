@@ -14,7 +14,7 @@ from academics.models import Subject,ClassRoom
 from .utils import build_student_records_workbook , decript_scores_from_workbook
 from .tasks import generate_report_and_position
 from .utils import build_student_character_workbook,decript_skills_from_workbook
-from .models import ResultBatch ,ReportSheet,StudentResult,StudentCharacterSkill ,CharacterBatch,ApprovalRecord
+from .models import  *
 from core.formatters import format_serializer_errors
 from core.permissions import DirectorUserPermission
 from school.models import School
@@ -60,6 +60,105 @@ class ResultBatchUpsertView(APIView):
             return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
+class FetchResultBatchDetailView(APIView):
+    # permission_classes=[HasSchoolPermission]
+    # permissions_required = [
+    #     SchoolPermissions.CAN_MANAGE_RESULTS
+    # ]
+    
+    def get(self, request,school_id,session_id,term_id,class_id,subject_id):
+        try :
+            valid_school = School.objects.filter(id=school_id).exists()
+            if not valid_school:
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
+            cache_key = f"result_{session_id}_{term_id}_{class_id}_{subject_id}_all"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    # pass
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            batch = ResultBatch.objects.filter(
+                class_room__school_id = school_id,
+                class_room=class_id,
+                subject_id = subject_id ,
+                session_id = session_id ,
+                term_id = term_id 
+            ).select_related(
+                'class_room','subject',
+                'teacher','session',
+                'term'
+            ).first()
+            
+            batchAllstudents= []
+            if not batch or not batch.is_locked :
+                students  = Student.objects.filter(
+                    class_rooms__class_room__school_id = school_id,
+                    class_rooms__class_room_id = class_id,
+                    class_rooms__session_id = session_id,
+                    class_rooms__status__in = ["active","enrolled"]
+                )
+                batchAllstudents = MiniStudentSerializer(students,many=True).data
+                
+            serializer = ResultBatchReadSerializer(batch).data 
+            resp =  {"success": "", "batch": serializer,"batchAllstudents":batchAllstudents}
+            try :
+                cache.set(cache_key,resp,timeout=60*5) # Cache for 3 minutes)
+            except:
+                pass
+            return Response( 
+                   resp,
+                    status=status.HTTP_200_OK
+                )
+        except Exception as e:
+            return Response({"error": 'server error'}, status=status.HTTP_200_OK)
+class FetchSkillBatchDetailView(APIView):
+    def get(self, request,school_id,session_id,term_id,class_id):
+        try :
+            valid_school = School.objects.filter(id=school_id).exists()
+            if not valid_school:
+                return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
+            cache_key = f"skill_{session_id}_{term_id}_{class_id}_all"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    # pass 
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            batch = CharacterBatch.objects.filter(
+                class_room__school_id = school_id,
+                class_room=class_id,
+                session_id = session_id ,
+                term_id = term_id 
+            ).select_related(
+                'class_room',
+                'session',
+                'term'
+            ).first()
+            batchAllstudents= []
+            if not batch or not batch.is_locked :
+                students  = Student.objects.filter(
+                    class_rooms__class_room__school_id = school_id,
+                    class_rooms__class_room_id = class_id,
+                    class_rooms__session_id = session_id,
+                    class_rooms__status__in = ["active","enrolled"]
+                )
+                batchAllstudents = MiniStudentSerializer(students,many=True).data
+                
+            serializer = SkillBatchReadDetailSerializer(batch).data 
+            resp =  {"success": "", "batch": serializer,"batchAllstudents":batchAllstudents}
+            try :
+                cache.set(cache_key,resp,timeout=60*5) # Cache for 3 minutes)
+            except:
+                pass
+            return Response( 
+                   resp,
+                    status=status.HTTP_200_OK
+                )
+        except Exception as e:
+            return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 class FetchResultBatchView(APIView):
     permission_classes=[HasSchoolPermission]
     permissions_required = [
@@ -69,7 +168,7 @@ class FetchResultBatchView(APIView):
     def get(self, request,school_id, session_id, term_id):
         try :
             valid_school = School.objects.filter(id=school_id).exists()
-            if not valid_school:
+            if not valid_school :
                 return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
             cache_key = f"results_{school_id}_{session_id}_{term_id}"
             try :
@@ -80,7 +179,7 @@ class FetchResultBatchView(APIView):
             except :
                 pass
             batches = ResultBatch.objects.filter(
-                class_room__section__school__id = school_id,
+                class_room__school_id = school_id,
                 session_id=session_id,
                 term_id=term_id
             ).select_related(
@@ -88,8 +187,8 @@ class FetchResultBatchView(APIView):
             )
             if not batches :
                 return Response({"success": 'data not found'}, status=status.HTTP_200_OK)
-                
-            serializer = ResultBatchReadSerializer(batches, many=True).data 
+            serializer = ResultBatchReadListSerializer(batches, many=True).data 
+            
             resp =  {"success": "", "filteredBatches": serializer}
             try :
                 cache.set(cache_key,resp,timeout=60*5) # Cache for 3 minutes)
@@ -184,7 +283,7 @@ class UploadScoresAPIView(APIView):
             school_id = request.data.get("school")
             class_id = request.data.get("class_room")
             
-            if not file:
+            if not file :
                 return Response({"error": "No file uploaded"}, status=status.HTTP_200_OK)
             
             valid_school = School.objects.filter(id=school_id).first()
@@ -193,7 +292,7 @@ class UploadScoresAPIView(APIView):
             pin = request.data.get("pin")
             if not request.user.pins.checkPin(pin) :
                 return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
-            
+            # validate teacher 
             students = Student.objects.filter(
                 class_rooms__class_room__id=class_id,
                 class_rooms__status__in=["active", "enrolled"],
@@ -257,7 +356,7 @@ class DownloadSkillTemplateView(APIView):
 
 class BatchManageAPIView(APIView) : 
     permission_classes=[HasSchoolPermission]
-    permissions_required = [ SchoolPermissions.CAN_MANAGE_RESULTS ]
+    permissions_required = [ SchoolPermissions.CAN_MANAGE_RESULTS]
     
     def post(self, request):
         try :
@@ -288,33 +387,31 @@ class BatchManageAPIView(APIView) :
                 
             if action == 'SUBMISSION' :
                 batch.on_submit = not batch.on_submit
-                if not batch.on_submit : # checking for  false
+                
+                if not batch.on_submit : # the batch is rejected
                     batch.approved = False
                     batch.is_locked = False
-                # check if batch is comleted 
+                # check if batch is completed 
                 else :
-                    batch.is_locked = False
+                    batch.is_locked = True
                     if not  batch.status == "COMPLETE" :
-                        return Response({"error": "status must be completed first!"}, status=status.HTTP_200_OK)
+                        return Response({"error": "It must be completed first!"}, status=status.HTTP_200_OK)
                 
             batch.save()
             
             sta = "Locked" if batch.is_locked else "Unlocked"
-            # uiFieldName = "currentBatch" if  target == "RESULT" else "currentSkills" if target == "CHAR" else None 
             uiFieldName = "manageResults" if  target == "RESULT" else "manageSkills" if target == "CHAR" else None 
             
-            b = ResultBatchReadSerializer(batch).data if  target == "RESULT" else SkillBatchReadSerializer(batch).data if target == "CHAR" else None 
+            b = ResultBatchReadSerializer(batch).data if  target == "RESULT" else SkillBatchReadDetailSerializer(batch).data if target == "CHAR" else None 
             mapped = {
                 "id":b['id'],
-                "is_locked":b['is_locked'],
-                "isLocked":b['is_locked'],
-                "on_submit":b['on_submit'],
+                "is_locked":b['is_locked'] ,
+                "isLocked":b['is_locked'] ,
+                "on_submit":b['on_submit'] ,
                 "approved":b["approved"],
                 "status":b["status"],
                 "lastUpdated":b["lastUpdated"]
-                
             }
-            
             return Response( 
                     {"success": f"Results {sta} successfully.", uiFieldName: mapped},
                     status=status.HTTP_200_OK
@@ -374,7 +471,7 @@ class BatchApproveAPIView(APIView):
             uiFieldName = "approvedResults" if  target == "RESULT" else "approvedSkills" if target == "CHAR" else None 
             if not batches :
                 return Response({"success":'data not found'},status=status.HTTP_200_OK)
-            data = ResultBatchReadSerializer(batches,many=True).data if  target == "RESULT" else SkillBatchReadSerializer(batches,many=True).data if target == "CHAR" else None 
+            data = ResultBatchReadSerializer(batches,many=True).data if  target == "RESULT" else SkillBatchReadDetailSerializer(batches,many=True).data if target == "CHAR" else None 
             mapped = [{
                 "id":b['id'],
                 "is_locked":b['is_locked'],
@@ -422,7 +519,7 @@ class StudentsSkillsUpsertOrGetView(APIView):
                 if not batch:
                     return Response({"error": 'enternal server error'}, status=status.HTTP_200_OK)
                
-                data = SkillBatchReadSerializer(batch).data 
+                data = SkillBatchReadDetailSerializer(batch).data 
                 return Response( 
                     {"success": "Skills updated.", "currentSkills": data},
                     status=status.HTTP_200_OK
@@ -434,7 +531,7 @@ class StudentsSkillsUpsertOrGetView(APIView):
     
     def get(self, request,school_id, session_id, term_id):
         try :
-            cache_key = f"charresults_{school_id}_{session_id}_{term_id}"
+            cache_key = f"charresults_{school_id}_{session_id}_{term_id}_dashbord"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
@@ -451,7 +548,7 @@ class StudentsSkillsUpsertOrGetView(APIView):
             )
             if not batches :
                 return Response({"success":'data not found'},status=status.HTTP_200_OK)
-            serializer = SkillBatchReadSerializer(batches, many=True).data 
+            serializer = SkillBatchReadListSerializer(batches, many=True).data 
             resp ={"success": "Skills fetched successfully.", "filteredCharAndSkills": serializer}
             try : 
                 cache.set(cache_key,resp,timeout=5*60)
@@ -466,7 +563,7 @@ class StudentsSkillsUpsertOrGetView(APIView):
 class UploadSkillAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     permission_classes=[HasSchoolPermission]
-    permissions_required = [ SchoolPermissions.CAN_MANAGE_RESULTS]
+    permissions_required = [ SchoolPermissions.CAN_MANAGE_RESULTS ]
 
     def post(self, request):
         try :
@@ -499,7 +596,7 @@ class UploadSkillAPIView(APIView):
                 batch = serializer.save()
                 if not batch:
                     return Response({"error": 'enternal server error'}, status=status.HTTP_200_OK)
-                data = SkillBatchReadSerializer(batch).data
+                data = SkillBatchReadDetailSerializer(batch).data
                 return Response( 
                     {"success": "Skills uploaded", "currentSkills": data},
                     
@@ -508,7 +605,6 @@ class UploadSkillAPIView(APIView):
             return Response({"error": format_serializer_errors(serializer.errors)}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
-
 class GenerateClassReportSheetAPIView(APIView):
     permission_classes=[HasSchoolPermission]
     permissions_required = [ SchoolPermissions.CAN_MANAGE_RESULTS]
@@ -527,13 +623,7 @@ class GenerateClassReportSheetAPIView(APIView):
             valid_school = School.objects.filter(id=school_id)  #.exists()
             if not valid_school:
                 return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
-            
-            report_data = generate_report_and_position.delay(term_id,session_id,class_id,school_id)
-            res = report_data.get() or {}
-            if res.get('error',None)  :
-                return Response( 
-                        res,status=status.HTTP_200_OK
-                    )
+            generate_report_and_position.delay(term_id,session_id,class_id,school_id)
             return Response( 
                 {"success": "reports Generation Starts. "},
                 status=status.HTTP_200_OK
@@ -543,13 +633,48 @@ class GenerateClassReportSheetAPIView(APIView):
         except Exception as e:
             return Response({"error":"server error"}, status=status.HTTP_200_OK)
 
+class ReportRecordListAPIView(APIView):
+    permission_classes=[HasSchoolPermission]
+    permissions_required = [SchoolPermissions.CAN_VIEW_RESULTS]
+    
+    def get(self, request,school_id,session_id,term_id) :
+        try :
+            cache_key = f"reportrecords_{session_id}_{term_id}_all"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    # pass
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            reports = ReportRecord.objects.filter(
+                school_id = school_id,
+                session_id = session_id, 
+                term_id = term_id,
+              )
+           
+            if not reports :
+                return Response({"success": "Reports not found"}, status=status.HTTP_200_OK)
+            
+            serializer = ReportSerializer(reports,many=True)
+            resp = {"success": "Records","reportRecords" :  serializer.data}
+            try : 
+                cache.set(cache_key,resp,timeout=5*60)
+            except :
+                pass
+            return Response( 
+                    resp ,
+                    status=status.HTTP_200_OK
+                )
+        except Exception as e:
+            return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 class ReportSheetListAPIView(APIView):
     permission_classes=[HasSchoolPermission]
     permissions_required = [SchoolPermissions.CAN_VIEW_RESULTS]
     
     def get(self, request,school_id,session_id,term_id,class_id) :
         try :
-            cache_key = f"reportsheets_{session_id}_{term_id}_{class_id}"
+            cache_key = f"reportsheets_{session_id}_{term_id}_{class_id}_all"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
@@ -597,7 +722,7 @@ class ReportSheetDetailAPIView(APIView):
     
     def get(self, request,school_id,session_id,term_id,class_id,student_id) :
         try :
-            cache_key = f"reportsheet_{session_id}_{term_id}_{class_id}_{student_id}"
+            cache_key = f"reportsheet_{session_id}_{term_id}_{class_id}_{student_id}_all"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :

@@ -29,7 +29,6 @@ SECRET_KEY = 'django-insecure-m)-^f(0%i(w1_j3@slrgx7e2w&)il*^if#st05g0t+#zb2b96o
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
 
 # Application definition
 INSTALLED_APPS = [
@@ -66,8 +65,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     # cors header
-    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     
     # "django.middleware.common.CommonMiddleware",
     
@@ -90,6 +89,7 @@ REST_FRAMEWORK = {
 }
 from datetime import timedelta
 
+
 SIMPLE_JWT = {
   # It will work instead of the default serializer(TokenObtainPairSerializer).
   "TOKEN_OBTAIN_SERIALIZER": "authUser.serializers.CustomTokenObtainPairSerializer",
@@ -101,21 +101,27 @@ SIMPLE_JWT = {
 }
 
 
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://192.168.139.26:3000', # put computer ip in dev 
-    'http://localhost:3000',
-    "https://edu-front-sandy.vercel.app"
+# 3. Allow JWT and ngrok headers
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "authorization",
+    "ngrok-skip-browser-warning",
 ]
-CORS_ALLOWED_ORIGIN_ALL = True
+
+# CORS_ALLOW_ALL_ORIGINS = True
+# the hosts the host where to make request to here, thats your frontend host 
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000', #local 
+    "https://1b69-102-89-76-171.ngrok-free.app", # ngrok
+]
 
 CSRF_TRUSTED_ORIGINS = [
-   'http://192.168.203.26:5173',  # Replace with your ngrok URL
-   'http://192.168.18.18',  # Replace with your ngrok URL
-   "http://192.168.139.26:3000"
-   "http://192.168.139.26:3000"
+    "https://1b69-102-89-76-171.ngrok-free.app", # ngrok 
+    "https://19a1-102-89-76-171.ngrok-free.app", # ngrok 
 ]
-ALLOWED_HOSTS = ['*']  # for dev only; replace with your LAN IP or domain in prod
+ALLOWED_HOSTS = ["*"]
+# The host allowed to host Django Back no need of https:// here 
+# ALLOWED_HOSTS = ["19a1-102-89-76-171.ngrok-free.app",'127.0.0.1']  # ngrok and local
 
 
 TEMPLATES = [

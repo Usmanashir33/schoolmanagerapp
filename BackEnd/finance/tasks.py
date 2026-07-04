@@ -10,7 +10,6 @@ from student.models import Student, StudentClassEnrollment
 from school.models import Session,Term,School
 from django.core .cache import cache
 
-
 @shared_task
 def generate_student_term_fees_task(school_id, session_id, term_id, class_ids):
 
@@ -28,36 +27,39 @@ def generate_student_term_fees_task(school_id, session_id, term_id, class_ids):
         school=school,
         class_rooms__class_room__id__in=class_ids,
         class_rooms__status__in=['active', 'enrolled']
-    ).prefetch_related("class_rooms__class_room").distinct("id")
+    ).prefetch_related("class_rooms__class_room").order_by("id").distinct("id")
     
+    # ✅ FIX: Extract raw IDs into a list to prevent conflicting SQL subqueries
+    student_ids = list(classes_students.values_list('id', flat=True))
+
     # ✅ Fee map
     class_fee_map = {}
     for fee in school.class_fee_settings.all():
         for cr in fee.class_rooms.all():
-            class_fee_map[cr.id] = fee.amount
+            class_fee_map[str(cr.id)] = fee.amount
 
-    # ✅ Last transactions (single query)
+    # ✅ Last transactions (Now safely using the extracted list of IDs)
     last_trxs = (
     StudentTransaction.objects
-        .filter(student__in=classes_students)
-        .order_by("student__id", "-created_at")
-        .distinct("student__id")
+        .filter(student_id__in=student_ids) # Using student_id__in with raw IDs
+        .order_by("student_id", "-created_at")
+        .distinct("student_id")
     )
 
     old_last_trx_netbalances_map = {}
     for trx in last_trxs:
-        if  not old_last_trx_netbalances_map.get(trx.student.id):
-            old_last_trx_netbalances_map[trx.student.id] = trx.net_balance or 0
+        if not old_last_trx_netbalances_map.get(trx.student_id): # optimization: use student_id directly
+            old_last_trx_netbalances_map[trx.student_id] = trx.net_balance or 0
 
     latest_trx_netbalances_map = {}
 
-    # ✅ Existing logs
+    # ✅ Existing logs (Now safely using the extracted list of IDs)
     existing = set(
         StudentTransaction.objects.filter(
             session=session,
             term=term,
             class_room__in=classrooms,
-            student__in=classes_students
+            student_id__in=student_ids
         ).values_list("student__id", "class_room__id")
     )
 
@@ -69,18 +71,15 @@ def generate_student_term_fees_task(school_id, session_id, term_id, class_ids):
         for cr in student.class_rooms.all():
             if str(cr.class_room_id) in class_ids and cr.status in ['active', 'enrolled']:
                 class_students_map[str(cr.class_room_id)].append(student)
-    # print('class_students_map: ', class_students_map)
 
     created_transactions = []
 
     # ✅ Main logic
     for cls in classrooms:
-        fee = class_fee_map.get(cls.id)
+        fee = class_fee_map.get(str(cls.id))
         if not fee:
             continue
-        stdts =class_students_map.get(cls.id, []) 
-        # print('stdts: ', stdts) 
-        # break
+        stdts = class_students_map.get(str(cls.id), []) 
 
         for student in stdts :
 
@@ -114,6 +113,5 @@ def generate_student_term_fees_task(school_id, session_id, term_id, class_ids):
             latest_trx_netbalances_map[student.id] = net_balance
         StudentTransaction.objects.bulk_create(created_transactions)
         created_transactions = []
-
 
     return len(created_transactions)
