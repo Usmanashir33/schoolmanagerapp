@@ -23,6 +23,7 @@ urlpatterns = [
     path("fetchreportsheets/<uuid:school_id>/<str:session_id>/<str:term_id>/<str:class_id>/", ReportSheetListAPIView.as_view()), #Done
     path("reportrecords/<uuid:school_id>/<str:session_id>/<str:term_id>/", ReportRecordListAPIView.as_view()), #Done
     path("fetchreportsheet/<uuid:school_id>/<str:session_id>/<str:term_id>/<str:class_id>/<str:student_id>/", ReportSheetDetailAPIView.as_view()), #Done
+    path("fetchstudentreportsheet/<uuid:school_id>/<str:term_id>/<str:class_id>/<str:student_id>/", StudentReportSheetDetailAPIView.as_view()), #Done
     path("verification/<str:school_tag>/<str:student_id>/<str:report_id>/<int:zero_or_one>/<path:adm>/", ReportSheetVerificationAPIView.as_view()), #Done
     
     #------------------------------------------Teacher Site End points----------------------------------------

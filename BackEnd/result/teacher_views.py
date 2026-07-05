@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.parsers import MultiPartParser,FormParser
 from rest_framework.exceptions import ValidationError
 from django.db.models import Prefetch
+from core.permissions import TeacherUserPermission
 
 
 from academics.models import Subject,ClassRoom
@@ -28,6 +29,7 @@ from . serializers import *
 from django.core.cache import cache
 
 class TeacherFetchResultBatchView(APIView):
+    permission_classes=[TeacherUserPermission]
     def get(self, request,school_id,session_id, term_id):
         try :
             valid_school = School.objects.filter(id=school_id).exists()
@@ -64,9 +66,8 @@ class TeacherFetchResultBatchView(APIView):
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 
 class TeacherStudentsSkillsUpsertOrGetView(APIView):
-    # permission_classes=[HasSchoolPermission]
-    # permissions_required = [ SchoolPermissions.CAN_MANAGE_RESULTS]
-
+    permission_classes=[TeacherUserPermission]
+    
     def post(self, request):
         try :
             pin = request.data.get("pin")
@@ -141,6 +142,8 @@ class TeacherStudentsSkillsUpsertOrGetView(APIView):
         except Exception as e:
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 class TeacherReportRecordListAPIView(APIView):
+    permission_classes=[TeacherUserPermission]
+    
      
     def get(self, request,school_id,session_id,term_id) :
         try :
@@ -174,6 +177,8 @@ class TeacherReportRecordListAPIView(APIView):
         except Exception as e:
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 class TeacherReportSheetListAPIView(APIView):
+    permission_classes=[TeacherUserPermission]
+    
     def get(self, request,school_id,session_id,term_id,class_id) :
         try :
             cache_key = f"reportsheets_{session_id}_{term_id}_{class_id}_teacher_{request.user.id}"
@@ -223,6 +228,8 @@ class TeacherReportSheetListAPIView(APIView):
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
         
 class TeacherReportSheetDetailAPIView(APIView):
+    permission_classes=[TeacherUserPermission]
+    
     def get(self, request,school_id,session_id,term_id,class_id,student_id) :
         try :
             cache_key = f"reportsheet_{session_id}_{term_id}_{class_id}_{student_id}_teacher_{request.user.id}"
@@ -285,6 +292,8 @@ class TeacherReportSheetDetailAPIView(APIView):
         except Exception as e:
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 class TeacherResultBatchUpsertView(APIView):
+    permission_classes=[TeacherUserPermission]
+    
     def post(self, request):
         try :
             pin = request.data.get("pin")
@@ -312,6 +321,7 @@ class TeacherResultBatchUpsertView(APIView):
         except Exception as e:
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 class TeacherBatchManageAPIView(APIView) : 
+    permission_classes=[TeacherUserPermission]
     
     def post(self, request):
         try :
@@ -377,6 +387,7 @@ class TeacherBatchManageAPIView(APIView) :
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
         
 class TeacherUploadScoresAPIView(APIView):
+    permission_classes=[TeacherUserPermission]
     parser_classes = [MultiPartParser, FormParser]
     
     def post(self, request):
@@ -422,6 +433,7 @@ class TeacherUploadScoresAPIView(APIView):
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
         
 class TeacherUploadSkillAPIView(APIView):
+    permission_classes=[TeacherUserPermission]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -471,6 +483,7 @@ class TeacherUploadSkillAPIView(APIView):
         except Exception as e:
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 class TeacherStudentsSkillsUpsert(APIView):
+    permission_classes=[TeacherUserPermission]
     def post(self, request):
         try :
             pin = request.data.get("pin")

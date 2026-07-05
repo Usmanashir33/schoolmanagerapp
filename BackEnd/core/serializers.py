@@ -76,6 +76,25 @@ class ParentSchoolSerializer(serializers.ModelSerializer):
                 student_id__in = student_ids
 
             )
+            latest_balance_subquery = (
+                StudentTransaction.objects
+                .filter(student=OuterRef("student"))
+                .order_by("-created_at")
+                .values("net_balance")[:1]
+            )
+            trxs = strxs.filter(status__in  = ['PAID',]).select_related(
+                    'payment_source'
+                ).order_by(
+                    "student_id",
+                    "-created_at"
+                ).distinct(
+                    "student_id"
+                ).annotate(
+                    current_net_balance=Subquery(latest_balance_subquery,output_field=FloatField())
+                    
+                )
+            data = StudentsTrxsSerializer(trxs.all(),many = True ).data
+                
 
             total_net_bal = latest_trxs.aggregate(
                 total_balance=Sum("net_balance")
@@ -87,6 +106,7 @@ class ParentSchoolSerializer(serializers.ModelSerializer):
             )
             paid_count = total_paid.distinct('student_id').count()
             return ({
+                'studentTrxs' : data,
                 "totalNetBalance" : total_net_bal ,
                 "totalPaid" : tp['total'],
                 "paidCount" : paid_count,

@@ -282,8 +282,8 @@ class ParentSchoolDetailView(APIView):
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
-                    pass
-                    # return Response(cached_response, status=status.HTTP_200_OK)
+                    # pass
+                    return Response(cached_response, status=status.HTTP_200_OK)
             except :
                 pass
             school_data = School.objects.filter(id=school_id).prefetch_related(

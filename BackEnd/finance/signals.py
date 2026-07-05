@@ -1,8 +1,6 @@
 
 from django.db.models.signals import pre_save, post_save ,pre_delete ,post_delete
 from django.dispatch import receiver
-from authUser.models import User
-from django.core.mail import send_mail
 from django.core.cache import cache
 from .models import StudentTransaction,PaymentInitiation
 

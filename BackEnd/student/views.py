@@ -162,7 +162,7 @@ class StudentDetailView(APIView):
     def get(self, request,school_id,student_id):  
         try: 
             # validate director actions 
-            cache_key = f"student_detail_{school_id}_{student_id}"
+            cache_key = f"student_detail_{school_id}_{student_id}_{request.user.id}"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
@@ -192,14 +192,11 @@ class StudentDetailView(APIView):
             return Response({"error": "server error"}, status=status.HTTP_200_OK )
             
     def post(self, request):   ## add new student 
-        # try:
+        try:
             pin = request.data.get( "pin" )
             school_id = request.data.get("school") 
             email = request.data.get("email",'unknown')
             phone = request.data.get("phone",'unknown')
-            
-            # if not request.user.pins.checkPin(pin) :
-            #     return Response({"error": "Incorrect PIN"}, status=status.HTTP_200_OK)
             
              # validate director actions 
             valid_school = School.objects.filter(id=school_id).exists() #.exists()
@@ -232,8 +229,8 @@ class StudentDetailView(APIView):
             
             return Response({"error": format_serializer_errors(serializer.errors) }, status=status.HTTP_200_OK)
 
-        # except Exception as e :
-            # return Response({"error": str(e) }, status=status.HTTP_200_OK)
+        except Exception as e :
+            return Response({"error": str(e) }, status=status.HTTP_200_OK)
 
     # ---------------- UPDATE STUDENT -----------------
     def put(self, request,student_id):

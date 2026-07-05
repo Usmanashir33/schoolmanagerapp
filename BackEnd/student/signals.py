@@ -121,6 +121,6 @@ def clear_student_cache(sender, instance, **kwargs):
         cache.delete_pattern(
             f"students_{instance.school.id}_*"
         )
-        cache.delete(f"student_detail_{instance.student.school.id}_{instance.student.id}")
+        cache.delete_pattern(f"student_detail_{instance.student.school.id}_{instance.student.id}_*")
     except :
         pass

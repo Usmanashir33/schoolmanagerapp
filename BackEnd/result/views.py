@@ -61,17 +61,12 @@ class ResultBatchUpsertView(APIView):
         except Exception as e:
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 class FetchResultBatchDetailView(APIView):
-    # permission_classes=[HasSchoolPermission]
-    # permissions_required = [
-    #     SchoolPermissions.CAN_MANAGE_RESULTS
-    # ]
-    
     def get(self, request,school_id,session_id,term_id,class_id,subject_id):
         try :
             valid_school = School.objects.filter(id=school_id).exists()
             if not valid_school:
                 return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
-            cache_key = f"result_{session_id}_{term_id}_{class_id}_{subject_id}_all"
+            cache_key = f"result_{session_id}_{term_id}_{class_id}_{subject_id}_{request.user.id}"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
@@ -119,7 +114,7 @@ class FetchSkillBatchDetailView(APIView):
             valid_school = School.objects.filter(id=school_id).exists()
             if not valid_school:
                 return Response({"error": "Invalid School Entry"}, status=status.HTTP_200_OK)
-            cache_key = f"skill_{session_id}_{term_id}_{class_id}_all"
+            cache_key = f"skill_{session_id}_{term_id}_{class_id}_{request.user.id}"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
@@ -639,7 +634,7 @@ class ReportRecordListAPIView(APIView):
     
     def get(self, request,school_id,session_id,term_id) :
         try :
-            cache_key = f"reportrecords_{session_id}_{term_id}_all"
+            cache_key = f"reportrecords_{session_id}_{term_id}_{request.user.id}"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
@@ -674,7 +669,7 @@ class ReportSheetListAPIView(APIView):
     
     def get(self, request,school_id,session_id,term_id,class_id) :
         try :
-            cache_key = f"reportsheets_{session_id}_{term_id}_{class_id}_all"
+            cache_key = f"reportsheets_{session_id}_{term_id}_{class_id}_{request.user.id}"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :
@@ -716,13 +711,74 @@ class ReportSheetListAPIView(APIView):
                 )
         except Exception as e:
             return Response({"error": 'server error'}, status=status.HTTP_200_OK)
+class StudentReportSheetDetailAPIView(APIView):
+    
+    def get(self, request,school_id,term_id,class_id,student_id) :
+        try :
+            cache_key = f"reportsheet_{term_id}_{class_id}_{student_id}_{request.user.id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    # signal not cinfigured  
+                    # pass 
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            student = Student.objects.filter(
+                school_id = school_id,
+                id = student_id
+            ).prefetch_related(
+                Prefetch(
+                    "skills",
+                    queryset=StudentCharacterSkill.objects.filter(
+                        batch__term_id = term_id,
+                        batch__class_room_id = class_id
+                    ).select_related("batch")
+                ),
+                Prefetch(
+                    "results",
+                    queryset = StudentResult.objects.filter(
+                        batch__term_id = term_id,
+                        batch__class_room_id = class_id
+                        ).select_related("batch"),
+                ),
+                Prefetch(
+                    "report_sheets",
+                    queryset=ReportSheet.objects.filter(
+                        term_id = term_id,
+                        class_room__id = class_id,
+                    ).select_related('class_room','term','session'),
+                    to_attr="report_sheet",
+                ),
+            ).first()
+            report = next(iter(student.report_sheet), None)
+            
+            if not student or not report:
+                return Response({"success": "Report not found"}, status=status.HTTP_200_OK)
+                
+            # we will include scores and skills in the report for subjects  and characters 
+            scores = student.results.all()
+            skills = student.skills.first()
+            
+            serializer = ReportSheetDetailSerializer(report,context={"scores":scores,"skills":skills})
+            resp = {"success": "Report","reportSheet" :  serializer.data}
+            try : 
+                cache.set(cache_key,resp,timeout=5*60)
+            except :
+                pass
+            return Response( 
+                    resp ,
+                    status=status.HTTP_200_OK
+                )
+        except Exception as e:
+            return Response({"error": 'server error'}, status=status.HTTP_200_OK)
 class ReportSheetDetailAPIView(APIView):
     permission_classes=[HasSchoolPermission]
     permissions_required = [SchoolPermissions.CAN_VIEW_RESULTS]
     
     def get(self, request,school_id,session_id,term_id,class_id,student_id) :
         try :
-            cache_key = f"reportsheet_{session_id}_{term_id}_{class_id}_{student_id}_all"
+            cache_key = f"reportsheet_{session_id}_{term_id}_{class_id}_{student_id}_{request.user.id}"
             try :
                 cached_response = cache.get(cache_key)
                 if cached_response :

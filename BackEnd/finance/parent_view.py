@@ -71,12 +71,6 @@ class ParentPaymentsView(APIView):
                 ).order_by('-date_initiated')
                 .distinct()  # Eliminates duplicate entries caused by Many-to-Many joins
             )
-
-            # 3. Categorize query evaluation datasets cleanly
-            
-            # Combine into execution layout
-            # pendingPaymentsList = [*pendings, *rejected, *approved]
-            
             # 4. Serialize dataset safely
             pendingPayments = PaymentInitiationSerializer(payms, many=True)
             resp = {"success": "allPayments", "allPayments": pendingPayments.data}

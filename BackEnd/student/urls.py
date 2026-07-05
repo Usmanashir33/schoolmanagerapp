@@ -1,5 +1,7 @@
 from django.urls import path
 
+from .parent_view import ParentStudentDetailView
+
 from .views import *
 
 urlpatterns = [
@@ -13,5 +15,8 @@ urlpatterns = [
     path('details/<uuid:school_id>/<uuid:student_id>/',  StudentDetailView.as_view(), name='get-student'), #Tested
     path('update-student/<str:student_id>/',StudentDetailView.as_view(), name='update-student'),#Tested
     path('manage-student/<str:student_id>/<str:request_action>/', StudentAdministrationView.as_view(), name='manage-student'),#tasted
+    #---------------------------------------------Parent Site --------------------------
+    path('details-by-parent/<uuid:school_id>/<uuid:student_id>/',  ParentStudentDetailView.as_view(), name='get-student'), #Tested
+    
     
 ]

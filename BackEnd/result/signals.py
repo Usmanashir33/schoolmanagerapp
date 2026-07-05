@@ -48,6 +48,8 @@ def clear_reportsheets_cache(sender, instance, **kwargs):
             
             cache_key2 = f"reportsheet_{instance.session_id}_{instance.term_id}_{instance.class_room_id}_{instance.student_id}_*"
             cache.delete_pattern(cache_key2)
+            cache_key2 = f"reportsheet_{instance.term_id}_{instance.class_room_id}_{instance.student_id}_*"
+            cache.delete_pattern(cache_key2)
             
             cache_key2 = f"reportrecords_{instance.session_id}_{instance.term_id}_*"
             cache.delete_pattern(cache_key2)
