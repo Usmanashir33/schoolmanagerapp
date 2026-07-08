@@ -117,7 +117,8 @@ class SchoolPermissionSerializer(serializers.ModelSerializer) :
             setattr(instance, attr, value)
         instance.save()
         return instance
-    
+
+        
 class SchoolRoleSerializer(serializers.ModelSerializer) :
     permissions = SchoolPermissionSerializer(many=True, read_only=True)
     permissionIds = serializers.SerializerMethodField(read_only=True)

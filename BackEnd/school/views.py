@@ -13,7 +13,7 @@ from core.emails.email_templates.emails import generate_otp_email,generate_login
 from core.emails.email_templates.emails import generate_school_update_email,generate_school_delete_email
 from core.tasks import send_html_email,send_ordinary_sms
 
-from core.permissions import DirectorUserPermission, ParentPermissionDenied,TeacherUserPermission,ParentUserPermission
+from core.permissions import DirectorUserPermission, StaffUserPermission,TeacherUserPermission,ParentUserPermission
 from core.formatters import format_serializer_errors
 
 
@@ -408,6 +408,95 @@ class TeacherSchoolDetailView(APIView) :
             return Response(resp , status=status.HTTP_200_OK)
         except:
             return Response({"error":"server error"},status=status.HTTP_200_OK)
+class StaffSchoolDetailView(APIView) :
+    permission_classes=[
+        permissions.IsAuthenticated,
+        StaffUserPermission,
+    ]
+    def get(self, request,school_id): # get school data 
+        try:
+            # limited to 15  recordes    per model tjo avoid overloading the response and client side
+            cache_key = f"school_{school_id}_dashbord_staff_{request.user.id}"
+            try :
+                cached_response = cache.get(cache_key)
+                if cached_response :
+                    return Response(cached_response, status=status.HTTP_200_OK)
+            except :
+                pass
+            school_data = School.objects.filter(id=school_id).prefetch_related(
+                    'finance',
+                    "permissions", 
+                    "classrooms",
+                    "sections__classrooms__student_enrollments",
+                    "subjects__teaching_assignments",
+                    Prefetch( # No body can update director 
+                        "roles",
+                        queryset=SchoolRole.objects.exclude(name__exact = "Director").order_by("name") 
+                    ),
+                    
+                    Prefetch(
+                        "promotion_logs",
+                        queryset=PromotionLog.objects.filter(session__is_current = True).order_by("-created_at")
+                    ),
+                    Prefetch(
+                        "students",
+                        queryset=Student.objects.select_related("user").order_by("joined_at")
+                    ),
+                    Prefetch(
+                        "teachers",
+                        queryset=Teacher.objects.select_related("user").order_by("joined_at")
+                    ),
+                    Prefetch(
+                        "staffs",
+                        queryset=Staff.objects.select_related("user").order_by("joined_at")
+                    ),
+                    Prefetch(
+                        "parents",
+                        queryset=Parents.objects.select_related("user").order_by("joined_at")
+                    ),
+                    
+                    Prefetch(
+                        "templates",
+                        queryset=Templates.objects.order_by("-created_at")
+                    ),
+                    Prefetch(
+                        "class_fee_settings",
+                        queryset=ClassFeeSetting.objects.order_by("-created_at")
+                    ),
+                    Prefetch(
+                        "activity_logs",
+                        queryset=ActivityLog.objects.filter(user_id = request.user.id).order_by("-created_at")
+                    ),
+                ).first()
+            if not school_data :
+                return Response({"error":"school not found "},status=status.HTTP_200_OK)
+            
+            role=SchoolRole.objects.filter(users=request.user).prefetch_related('permissions').first()
+            # staff_perms  = role.permissions.values_list("name",flat=True)
+            resp = { 
+                "success":'school_data', 
+                "school_and_academics" : StaffSchoolSerializer(school_data).data, 
+                "school_students" : StudentSerializer(school_data.students.all()[:15],many=True).data , 
+                "school_teachers" : TeacherSerializer(school_data.teachers.all()[:15],many=True).data ,
+                # "school_staffs"   : StaffSerializer(school_data.staffs.all()[:15],many=True).data,
+                "templates" : TemplatesSerializer(school_data.templates,many=True).data,
+                "promotion_logs" : PromotionLogSerializer(school_data.promotion_logs.all()[:30],many=True).data,
+                "activity_logs" : ActivityLogSerializer(school_data.activity_logs.all()[:15],many=True).data,
+                "finance" : FinanceSettingsSerializer(school_data.finance).data ,
+                "class_fee_settings" : SchoolFeeSerializer(school_data.class_fee_settings,many=True).data,
+                "school_permissions" : SchoolPermissionSerializer(school_data.permissions,many=True).data,
+                # "staff_permissions" : staff_perms,
+                "staff_role" : MiniSchoolRoleSerializer(role).data,
+                "school_roles" : SchoolRoleSerializer(school_data.roles,many=True).data,
+                }
+            try :
+                cache.set(cache_key,resp,timeout=60*3) # Cache for 3 minutes)
+            except:
+                pass
+            return Response(resp , status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"server error"},status=status.HTTP_200_OK)
+        
 class DirectorSchoolDetailView(APIView) :
     permission_classes=[
         permissions.IsAuthenticated,
@@ -773,7 +862,11 @@ class SchoolRoleView(APIView) :
             
             updated_role = SchoolRoleSerializer(role,data=request.data,context = {"request":request,'perms':find_perms})
             if updated_role.is_valid() : 
-                updated_role.save()
+                saved_role = updated_role.save()
+                # Fetch fresh query data strings to avoid serialization or cross-join row multiplier traps
+                # users = saved_role.users.all()
+                # permissions = list(saved_role.permissions.values_list('name', flat=True)) # Clean list of names
+                
                 new_log = ActivityLog.objects.create(
                         school = school ,
                         user=request.user,
@@ -787,8 +880,14 @@ class SchoolRoleView(APIView) :
                         "type": "send_response1",
                         "activity_log": log_data,
                         }
+                # data2 = {
+                #         "type": "send_response1",
+                #         "updated_permissions": permissions,
+                #         }
                 try:
                     SchoolServices.send_activity_log.delay(destination=user_room, data=data)
+                    
+                    # SchoolServices.send_sockes_signals.delay(destinations=users_room, data=data2)
                 except :
                         pass
                 data = updated_role.data 

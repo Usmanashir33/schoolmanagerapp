@@ -14,6 +14,10 @@ class DirectorPermissionDenied(APIException):
     status_code = 202
     default_detail = {"error": "Director permission denied !."}
     default_code = "permission_denied"
+class StaffPermissionDenied(APIException):
+    status_code = 202
+    default_detail = {"error": "Staff permission denied !."}
+    default_code = "permission_denied"
 class TeacherPermissionDenied(APIException):
     status_code = 202
     default_detail = {"error": "Teacher permission denied !."}
@@ -41,6 +45,15 @@ class DirectorUserPermission(permissions.BasePermission):
             raise DirectorPermissionDenied()
         if not getattr(request.user, 'director',None) :
             raise DirectorPermissionDenied()
+        return True
+class StaffUserPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        school_id = view.kwargs.get('school_id') or request.data.get('school')or request.data.get('school_id') or request.query_params.get('school_id') or request.query_params.get('school')
+        # check if user is teacher in any of the schools
+        if not str(request.user.school_id) == str(school_id):
+            raise StaffPermissionDenied()
+        if not getattr(request.user, 'staff',None) :
+            raise StaffPermissionDenied()
         return True
 class TeacherUserPermission(permissions.BasePermission):
     def has_permission(self, request, view):

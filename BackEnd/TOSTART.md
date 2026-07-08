@@ -6,7 +6,7 @@ in order to host both front and back  with engrok you must add this in the back
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "authorization",
-    "ngrok-skip-browser-warning",
+    "ngrok-skip-browser-warning" ,
 ]
 
 # CORS_ALLOW_ALL_ORIGINS = True

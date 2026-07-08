@@ -11,3 +11,14 @@ class SchoolServices:
         except Exception as e:
             # log the error and retry the task after some time
             self.retry(countdown=10)  # retry after 10 seconds
+            
+    # @staticmethod
+    # @shared_task(bind=True, name="send_sockes_signals",max_retries=2)
+    # def send_sockes_signals(self, destinations:list, data):
+    #     from core.websocketutils import signal_sender
+    #     try :
+    #         for d in destinations :
+    #             signal_sender(d, data)
+    #     except Exception as e:
+    #         # log the error and retry the task after some time
+    #         self.retry(countdown=10)  # retry after 10 seconds

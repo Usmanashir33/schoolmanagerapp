@@ -4,19 +4,18 @@ from finance.serializers import StudentsTrxsSerializer
 from school.models import School,SchoolDeleteRequest
 from school.serializers import TermSerializer, SessionSerializer
 from academics.serializers import MiniClassRoomSerializer,MiniSchoolSectionSerializer,SubjectSerializer
-from student.models import Student,StudentClassEnrollment
-from student.serializers import MiniStudentSerializer
 from teacher.models import Teacher
 from director.models import Director
 from parent.models import Parents 
 from staff.models import Staff
 from core .models import BankDetails 
-from authUser.serializers import MiniUserSerializer
+from authUser.serializers import MiniUserSerializer 
+from school.models import SchoolPermission,SchoolRole
 
 from django.db.models import FloatField, Sum, DecimalField ,Q ,OuterRef, Subquery
 from django.db.models.functions import Coalesce
 import json 
-from finance.models import ClassFeeSetting, PaymentInitiation ,StudentTransaction
+from finance.models import  StudentTransaction
 
 
 
@@ -134,6 +133,64 @@ class TeacherSchoolSerializer(serializers.ModelSerializer):
     
     def get_logo(self, obj):
         return obj.logo.url if obj.logo else None
+    
+class StaffSchoolSerializer(serializers.ModelSerializer):
+    logo = serializers.SerializerMethodField(read_only =True)
+    sections = MiniSchoolSectionSerializer(many=True, read_only=True) # sections full 
+    classrooms =   MiniClassRoomSerializer(many=True, read_only =  True) # classroom full data
+    subjects = SubjectSerializer(many=True, read_only =  True)
+    
+    terms = TermSerializer(read_only=True,many=True)
+    sessions = SessionSerializer(read_only=True,many=True)
+    delete_requests = SchoolDeleteRequestSerialzer(read_only = True)
+    
+    total_teachers = serializers.SerializerMethodField(read_only = True)
+    total_students = serializers.SerializerMethodField(read_only = True)
+    total_staffs = serializers.SerializerMethodField(read_only = True)
+    
+    total_classrooms = serializers.SerializerMethodField(read_only = True)
+    total_sections = serializers.SerializerMethodField(read_only = True)
+    total_subjects = serializers.SerializerMethodField(read_only = True)
+    
+    class Meta:  
+        model = School
+        fields ='__all__'
+        read_only_fields = ['id', 'joined_at','ref_id','director']
+    
+    def get_total_teachers(self,obj) :
+        all = {"count":obj.teachers.count(),
+            "active":obj.teachers.filter(user__is_active = True).count(),
+            "inactive":obj.teachers.filter(user__is_active = False).count()
+            }
+        return all
+    
+    def get_total_students(self,obj) :
+        all = {"count":obj.students.count(),
+            "active":obj.students.filter(user__is_active = True).count(),
+            "inactive":obj.students.exclude(user__is_active = True).count(), # because student can exist with out user
+            "males":obj.students.exclude(gender = 'males').count() ,
+            "females":obj.students.exclude(gender = 'females').count()
+            }
+        return all 
+    
+    def get_total_staffs(self,obj) :
+        all = {"count":obj.staffs.count(),
+            "active":obj.staffs.filter(user__is_active = True).count(),
+            "inactive":obj.staffs.filter(user__is_active = False).count()
+            }
+        return all
+    
+    def get_total_classrooms(self,obj) :
+        return obj.classrooms.count()
+    
+    def get_total_sections(self,obj) :
+        return obj.sections.count()
+    
+    def get_total_subjects(self,obj) :
+        return obj.subjects.count()
+    
+    def get_logo(self, obj):
+        return obj.logo.url if obj.logo else None
 class DirectorSchoolSerializer(serializers.ModelSerializer):
     logo = serializers.SerializerMethodField(read_only =True)
     sections = MiniSchoolSectionSerializer(many=True, read_only=True) # sections full 
@@ -165,6 +222,8 @@ class DirectorSchoolSerializer(serializers.ModelSerializer):
     
     def get_total_students(self,obj) :
         all = {"count":obj.students.count(),
+            "males":obj.students.exclude(gender = 'males').count() ,
+            "females":obj.students.exclude(gender = 'females').count(),
             "active":obj.students.filter(user__is_active = True).count(),
             "inactive":obj.students.exclude(user__is_active = True).count() # because student can exist with out user
             }
@@ -189,8 +248,6 @@ class DirectorSchoolSerializer(serializers.ModelSerializer):
     def get_logo(self, obj):
         return obj.logo.url if obj.logo else None
     
-        
-    
     
 # --------------Director Role ------------------
 class DirectorSerializer(serializers.ModelSerializer): 
@@ -212,11 +269,24 @@ class TeacherSerializer(serializers.ModelSerializer) :
         model = Teacher 
         fields ='__all__'
         read_only_fields = ['id', 'joined_at']
-    
 
+class MiniSchoolPermissionSerializer(serializers.ModelSerializer) :
+    class Meta:
+        model = SchoolPermission
+        fields = ['id','school','name','description']
+        read_only_fields = ['id','name']
+    
+class MiniSchoolRoleSerializer(serializers.ModelSerializer) :
+    permissions = MiniSchoolPermissionSerializer(many=True, read_only=True)
+    class Meta:
+        model = SchoolRole
+        fields = '__all__'
+        read_only_fields = ['id']
 class StaffSerializer(serializers.ModelSerializer):
-    # school = SchoolSerializer()
+    school = StaffSchoolSerializer()
     user = MiniUserSerializer(read_only=True)
+    staff_role = MiniSchoolRoleSerializer(read_only =True)
+            
     class Meta:
         model = Staff
         fields = '__all__'
@@ -226,9 +296,9 @@ class StaffSerializer(serializers.ModelSerializer):
 class StudentSerializer(serializers.ModelSerializer):
     # school = SchoolSerializer()
     user = MiniUserSerializer(read_only=True)
-    class Meta:
-        model = Student
-        fields = '__all__' 
+    # class Meta:
+    #     model = Student
+    #     fields = '__all__' 
 
 class ParentsSerializer(serializers.ModelSerializer):
     user = MiniUserSerializer(read_only=True)

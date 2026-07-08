@@ -83,8 +83,8 @@ def reset_user_log_caches(sender, instance, created ,**kwargs):
 @receiver(post_delete, sender=TeachingAssignment)
 def clear_dashboard_cache(sender, instance, **kwargs):
         try :
-            cache_key = f"school_{instance.school_id}_dashbord"
-            cache.delete(cache_key)
+            cache_key = f"school_{instance.school_id}_*"
+            cache.delete_pattern(cache_key)
         except :
             pass
         

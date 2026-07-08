@@ -34,4 +34,7 @@ urlpatterns = [
     
     #--------------------------------------------Parent site -------------------------------------------
     path('school-detail/parent/<uuid:school_id>/', ParentSchoolDetailView.as_view(), name='school-detail-parent'),
+   
+    #--------------------------------------------Staff site -------------------------------------------
+    path('school-detail/staff/<uuid:school_id>/', StaffSchoolDetailView.as_view(), name='school-detail-parent'),
 ]  
